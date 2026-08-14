@@ -67,41 +67,21 @@ def save_data(data):
 # ==========================================
 # 🎨 4. دالة إنشاء بطاقة الـ Rank
 # ==========================================
-FONT_BYTES = None
-
-def get_custom_font(size):
-    global FONT_BYTES
-    # رابط مباشر وموثوق لخط Arial/DejaVu
-    if FONT_BYTES is None:
-        try:
-            font_url = "https://raw.githubusercontent.com/google/fonts/main/ofl/arial/Arial-Bold.ttf"
-            req = urllib.request.Request(font_url, headers={'User-Agent': 'Mozilla/5.0'})
-            FONT_BYTES = urllib.request.urlopen(req).read()
-        except Exception as e:
-            print(f"⚠️ فشل تنزيل الخط الرئيسي، سيتم جلب خط بديل: {e}")
-            try:
-                # رابط بديل 100% موثوق لخط Open Sans
-                alt_url = "https://cdn.jsdelivr.net/fontsource/fonts/open-sans@v34/latin-700.ttf"
-                req = urllib.request.Request(alt_url, headers={'User-Agent': 'Mozilla/5.0'})
-                FONT_BYTES = urllib.request.urlopen(req).read()
-            except Exception as ex:
-                print(f"❌ تعذر تنزيل أي خط: {ex}")
-                return ImageFont.load_default()
-
-    try:
-        return ImageFont.truetype(io.BytesIO(FONT_BYTES), size)
-    except Exception:
-        return ImageFont.load_default()
-
 async def generate_rank_card(member: discord.Member, level: int, current_xp: int, next_level_xp: int):
     card = Image.new("RGBA", (900, 300), color=(15, 16, 18, 255))
     draw = ImageDraw.Draw(card)
 
-    # جلب الخطوط بأحجام ضخمة وواضحة جداً
-    font_name = get_custom_font(42)
-    font_stats = get_custom_font(38)
-    font_sub = get_custom_font(24)
-    font_xp = get_custom_font(26)
+    # 🟢 مسار ملف الخط المرفوع بـ GitHub (تأكد أن اسم الملف في GitHub هو font.ttf)
+    FONT_FILE = os.path.join(BASE_DIR, "font.ttf")
+
+    try:
+        font_name = ImageFont.truetype(FONT_FILE, 42)   # اسم العضو
+        font_stats = ImageFont.truetype(FONT_FILE, 36)  # الأرقام #1 والمستوى
+        font_sub = ImageFont.truetype(FONT_FILE, 22)    # كلمات RANK و LEVEL
+        font_xp = ImageFont.truetype(FONT_FILE, 24)     # نص الـ XP
+    except Exception as e:
+        print(f"⚠️ تحذير: لم يتم العثور على ملف الخط font.ttf، سيتم استخدام الخط الافتراضي: {e}")
+        font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
 
     # الصورة الشخصية (Avatar)
     avatar_url = member.display_avatar.with_format("png").url
@@ -123,7 +103,7 @@ async def generate_rank_card(member: discord.Member, level: int, current_xp: int
 
     NEW_COLOR = (188, 201, 247, 255)
 
-    # الرتبة والمستوى بأحجام ضخمة
+    # الرتبة والمستوى
     draw.text((610, 30), "#1", font=font_stats, fill=(255, 255, 255, 255))
     draw.text((605, 75), "RANK", font=font_sub, fill=NEW_COLOR)
     
@@ -293,7 +273,9 @@ async def color(ctx, choice: str = None):
     else:
         await ctx.send("❌ حدث خطأ: لم يتم العثور على رتبة اللون في السيرفر، يرجى التأكد من الـ IDs.")
 
-# تشغيل البوت
+# ==========================================
+# 🔌 7. تشغيل البوت
+# ==========================================
 token = os.getenv("DISCORD_TOKEN")
 if token:
     bot.run(token)
