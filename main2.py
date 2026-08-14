@@ -2,9 +2,13 @@ import discord
 from discord.ext import commands
 import json
 import os
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 import io
 import urllib.request
+from dotenv import load_dotenv
+
+# تحميل متغيرات البيئة (.env)
+load_dotenv()
 
 # ==========================================
 # ⚙️ 1. إعدادات البوت والـ Intents
@@ -43,12 +47,17 @@ COLOR_ROLES = {
 # ==========================================
 # 💾 3. إدارة ملف حفظ البيانات (JSON)
 # ==========================================
-DATA_FILE = "users_xp.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE = os.path.join(BASE_DIR, "users_xp.json")
 
 def load_data():
     if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"⚠️ Error loading JSON data: {e}")
+            return {}
     return {}
 
 def save_data(data):
@@ -62,6 +71,25 @@ async def generate_rank_card(member: discord.Member, level: int, current_xp: int
     card = Image.new("RGBA", (900, 300), color=(15, 16, 18, 255))
     draw = ImageDraw.Draw(card)
 
+    # تنزيل خط تكبير أوتوماتيكي ممتاز
+    font_path = os.path.join(BASE_DIR, "Roboto-Bold.ttf")
+    if not os.path.exists(font_path):
+        try:
+            font_url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Bold.ttf"
+            urllib.request.urlretrieve(font_url, font_path)
+        except Exception as e:
+            print(f"Failed to download font: {e}")
+
+    # ضبط أحجام الخطوط لتكون كبيراً وواضحاً جداً
+    try:
+        font_name = ImageFont.truetype(font_path, 36)
+        font_stats = ImageFont.truetype(font_path, 32)
+        font_sub = ImageFont.truetype(font_path, 20)
+        font_xp = ImageFont.truetype(font_path, 22)
+    except:
+        font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
+
+    # الصورة الشخصية (Avatar)
     avatar_url = member.display_avatar.with_format("png").url
     req = urllib.request.Request(avatar_url, headers={'User-Agent': 'Mozilla/5.0'})
     avatar_bytes = urllib.request.urlopen(req).read()
@@ -74,22 +102,26 @@ async def generate_rank_card(member: discord.Member, level: int, current_xp: int
     draw_mask = ImageDraw.Draw(mask)
     draw_mask.ellipse((0, 0, avatar_size[0], avatar_size[1]), fill=255)
 
-    card.paste(avatar, (40, 70), mask)
+    card.paste(avatar, (40, 75), mask)
 
-    draw.text((220, 90), f"{member.name}", fill=(255, 255, 255, 255))
+    # اسم العضو
+    draw.text((220, 80), f"{member.name}", font=font_name, fill=(255, 255, 255, 255))
 
     NEW_COLOR = (188, 201, 247, 255)
 
-    draw.text((620, 45), "#1", fill=(255, 255, 255, 255))
-    draw.text((640, 90), "rank", fill=NEW_COLOR)
+    # الرتبة والمستوى بأحجام متناسقة
+    draw.text((620, 35), "#1", font=font_stats, fill=(255, 255, 255, 255))
+    draw.text((615, 75), "RANK", font=font_sub, fill=NEW_COLOR)
     
-    draw.text((790, 45), f"{level:02d}", fill=(255, 255, 255, 255))
-    draw.text((800, 90), "level", fill=NEW_COLOR)
+    draw.text((780, 35), f"{level:02d}", font=font_stats, fill=(255, 255, 255, 255))
+    draw.text((775, 75), "LEVEL", font=font_sub, fill=NEW_COLOR)
 
-    xp_text = f"{current_xp}XP / {next_level_xp}XP"
-    draw.text((720, 190), xp_text, fill=(200, 200, 200, 255))
+    # نص الـ XP
+    xp_text = f"{current_xp} XP / {next_level_xp} XP"
+    draw.text((630, 175), xp_text, font=font_xp, fill=(200, 200, 200, 255))
 
-    bar_x, bar_y = 220, 225
+    # شريط التقدم
+    bar_x, bar_y = 220, 215
     bar_width, bar_height = 630, 30
     
     draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_width, bar_y + bar_height], radius=15, fill=(50, 53, 59, 255))
@@ -247,4 +279,9 @@ async def color(ctx, choice: str = None):
     else:
         await ctx.send("❌ حدث خطأ: لم يتم العثور على رتبة اللون في السيرفر، يرجى التأكد من الـ IDs.")
 
-bot.run(os.getenv("DISCORD_TOKEN"))
+# تشغيل البوت مع التحقق من وجود المتغير
+token = os.getenv("DISCORD_TOKEN")
+if token:
+    bot.run(token)
+else:
+    print("❌ Error: DISCORD_TOKEN is missing in environment variables!")
