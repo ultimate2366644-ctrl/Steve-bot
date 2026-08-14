@@ -67,27 +67,41 @@ def save_data(data):
 # ==========================================
 # 🎨 4. دالة إنشاء بطاقة الـ Rank
 # ==========================================
+FONT_BYTES = None
+
+def get_custom_font(size):
+    global FONT_BYTES
+    # رابط مباشر وموثوق لخط Arial/DejaVu
+    if FONT_BYTES is None:
+        try:
+            font_url = "https://raw.githubusercontent.com/google/fonts/main/ofl/arial/Arial-Bold.ttf"
+            req = urllib.request.Request(font_url, headers={'User-Agent': 'Mozilla/5.0'})
+            FONT_BYTES = urllib.request.urlopen(req).read()
+        except Exception as e:
+            print(f"⚠️ فشل تنزيل الخط الرئيسي، سيتم جلب خط بديل: {e}")
+            try:
+                # رابط بديل 100% موثوق لخط Open Sans
+                alt_url = "https://cdn.jsdelivr.net/fontsource/fonts/open-sans@v34/latin-700.ttf"
+                req = urllib.request.Request(alt_url, headers={'User-Agent': 'Mozilla/5.0'})
+                FONT_BYTES = urllib.request.urlopen(req).read()
+            except Exception as ex:
+                print(f"❌ تعذر تنزيل أي خط: {ex}")
+                return ImageFont.load_default()
+
+    try:
+        return ImageFont.truetype(io.BytesIO(FONT_BYTES), size)
+    except Exception:
+        return ImageFont.load_default()
+
 async def generate_rank_card(member: discord.Member, level: int, current_xp: int, next_level_xp: int):
     card = Image.new("RGBA", (900, 300), color=(15, 16, 18, 255))
     draw = ImageDraw.Draw(card)
 
-    # تنزيل خط تكبير أوتوماتيكي ممتاز
-    font_path = os.path.join(BASE_DIR, "Roboto-Bold.ttf")
-    if not os.path.exists(font_path):
-        try:
-            font_url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Bold.ttf"
-            urllib.request.urlretrieve(font_url, font_path)
-        except Exception as e:
-            print(f"Failed to download font: {e}")
-
-    # ضبط أحجام الخطوط لتكون كبيراً وواضحاً جداً
-    try:
-        font_name = ImageFont.truetype(font_path, 36)
-        font_stats = ImageFont.truetype(font_path, 32)
-        font_sub = ImageFont.truetype(font_path, 20)
-        font_xp = ImageFont.truetype(font_path, 22)
-    except:
-        font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
+    # جلب الخطوط بأحجام ضخمة وواضحة جداً
+    font_name = get_custom_font(42)
+    font_stats = get_custom_font(38)
+    font_sub = get_custom_font(24)
+    font_xp = get_custom_font(26)
 
     # الصورة الشخصية (Avatar)
     avatar_url = member.display_avatar.with_format("png").url
@@ -105,20 +119,20 @@ async def generate_rank_card(member: discord.Member, level: int, current_xp: int
     card.paste(avatar, (40, 75), mask)
 
     # اسم العضو
-    draw.text((220, 80), f"{member.name}", font=font_name, fill=(255, 255, 255, 255))
+    draw.text((220, 75), f"{member.name}", font=font_name, fill=(255, 255, 255, 255))
 
     NEW_COLOR = (188, 201, 247, 255)
 
-    # الرتبة والمستوى بأحجام متناسقة
-    draw.text((620, 35), "#1", font=font_stats, fill=(255, 255, 255, 255))
-    draw.text((615, 75), "RANK", font=font_sub, fill=NEW_COLOR)
+    # الرتبة والمستوى بأحجام ضخمة
+    draw.text((610, 30), "#1", font=font_stats, fill=(255, 255, 255, 255))
+    draw.text((605, 75), "RANK", font=font_sub, fill=NEW_COLOR)
     
-    draw.text((780, 35), f"{level:02d}", font=font_stats, fill=(255, 255, 255, 255))
-    draw.text((775, 75), "LEVEL", font=font_sub, fill=NEW_COLOR)
+    draw.text((770, 30), f"{level:02d}", font=font_stats, fill=(255, 255, 255, 255))
+    draw.text((765, 75), "LEVEL", font=font_sub, fill=NEW_COLOR)
 
     # نص الـ XP
     xp_text = f"{current_xp} XP / {next_level_xp} XP"
-    draw.text((630, 175), xp_text, font=font_xp, fill=(200, 200, 200, 255))
+    draw.text((600, 170), xp_text, font=font_xp, fill=(200, 200, 200, 255))
 
     # شريط التقدم
     bar_x, bar_y = 220, 215
@@ -279,7 +293,7 @@ async def color(ctx, choice: str = None):
     else:
         await ctx.send("❌ حدث خطأ: لم يتم العثور على رتبة اللون في السيرفر، يرجى التأكد من الـ IDs.")
 
-# تشغيل البوت مع التحقق من وجود المتغير
+# تشغيل البوت
 token = os.getenv("DISCORD_TOKEN")
 if token:
     bot.run(token)
