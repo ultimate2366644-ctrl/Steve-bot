@@ -7,7 +7,6 @@ import io
 import urllib.request
 from dotenv import load_dotenv
 
-# تحميل متغيرات البيئة (.env)
 load_dotenv()
 
 # ==========================================
@@ -73,21 +72,26 @@ async def generate_rank_card(
     card = Image.new("RGBA", (1200, 400), color=(15, 16, 18, 255))
     draw = ImageDraw.Draw(card)
 
-    # 🔎 البحث التلقائي عن أي ملف خط موجود في المجلد لضمان قراءته
+    # 🔎 البحث عن ملف الخط (.ttf أو .otf) المرفوع
     font_path = None
-    for file in os.listdir(BASE_DIR):
-        if file.lower().endswith(('.ttf', '.otf')):
-            font_path = os.path.join(BASE_DIR, file)
+    for root, dirs, files in os.walk(BASE_DIR):
+        for file in files:
+            if file.lower().endswith(('.ttf', '.otf')):
+                font_path = os.path.join(root, file)
+                print(f"✅ تم العثور على خط: {file}")
+                break
+        if font_path:
             break
 
     try:
         if font_path:
+            # أحجام الخطوط العريضة
             font_name = ImageFont.truetype(font_path, 55)   # اسم العضو
-            font_stats = ImageFont.truetype(font_path, 45)  # #1 والمستوى
-            font_sub = ImageFont.truetype(font_path, 32)    # RANK و LEVEL
-            font_xp = ImageFont.truetype(font_path, 30)     # XP
+            font_stats = ImageFont.truetype(font_path, 45)  # الأرقام (#1 والمستوى)
+            font_sub = ImageFont.truetype(font_path, 35)    # كلمتي RANK و LEVEL
+            font_xp = ImageFont.truetype(font_path, 30)     # نص الـ XP
         else:
-            print("⚠️ لم يتم العثور على ملف خط! تأكد من رفعه على GitHub بنفس المجلد.")
+            print("⚠️ لم يتم رصد أي ملف .ttf، التأكد من حفظه بنفس مجلد البوت.")
             font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
     except Exception as e:
         print(f"⚠️ خطأ في قراءة الخط: {e}")
