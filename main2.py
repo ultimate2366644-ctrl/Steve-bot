@@ -72,27 +72,17 @@ async def generate_rank_card(
     card = Image.new("RGBA", (1200, 400), color=(15, 16, 18, 255))
     draw = ImageDraw.Draw(card)
 
-    # 🌐 مسار تنزيل الخط تلقائياً من Google Fonts لضمان القراءة
-    font_path = os.path.join(BASE_DIR, "Roboto-Bold.ttf")
-
-    if not os.path.exists(font_path):
-        try:
-            print("⏳ جاري تنزيل خط Roboto-Bold من Google Fonts...")
-            url = "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Bold.ttf"
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req) as response, open(font_path, "wb") as out_file:
-                out_file.write(response.read())
-            print("✅ تم تنزيل الخط بنجاح!")
-        except Exception as e:
-            print(f"⚠️ فشل تنزيل الخط تلقائياً: {e}")
+    # 📁 مسار ملف roboto.ttf الموجود في المستودع
+    font_path = os.path.join(BASE_DIR, "roboto.ttf")
 
     try:
-        font_name = ImageFont.truetype(font_path, 55)   # اسم العضو
-        font_stats = ImageFont.truetype(font_path, 45)  # الأرقام
-        font_sub = ImageFont.truetype(font_path, 90)    # RANK و LEVEL
-        font_xp = ImageFont.truetype(font_path, 30)     # XP
+        # 🔍 التكبير الأقصى للأحجام
+        font_name = ImageFont.truetype(font_path, 65)   # اسم العضو
+        font_stats = ImageFont.truetype(font_path, 55)  # أرقام #1 و 01
+        font_sub = ImageFont.truetype(font_path, 38)    # كلمتي RANK و LEVEL
+        font_xp = ImageFont.truetype(font_path, 36)     # نص الـ XP
     except Exception as e:
-        print(f"⚠️ يتعذر فتح الخط، استخدام الافتراضي: {e}")
+        print(f"⚠️ تعذر فتح ملف roboto.ttf: {e}")
         font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
 
     # الصورة الشخصية
@@ -101,27 +91,27 @@ async def generate_rank_card(
     avatar_bytes = urllib.request.urlopen(req).read()
     avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
 
-    avatar_size = (190, 190)
+    avatar_size = (200, 200)
     avatar = avatar.resize(avatar_size)
 
     mask = Image.new("L", avatar_size, 0)
     draw_mask = ImageDraw.Draw(mask)
     draw_mask.ellipse((0, 0, avatar_size[0], avatar_size[1]), fill=255)
 
-    card.paste(avatar, (55, 105), mask)
+    card.paste(avatar, (50, 100), mask)
 
     # اسم العضو
-    draw.text((285, 105), member.name, font=font_name, fill=(255, 255, 255, 255))
+    draw.text((285, 125), member.name, font=font_name, fill=(255, 255, 255, 255))
 
     NEW_COLOR = (188, 201, 247, 255)
 
     # 🏆 RANK
-    draw.text((800, 45), "#1", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
-    draw.text((800, 105), "RANK", font=font_sub, fill=NEW_COLOR, anchor="mm")
+    draw.text((800, 90), "#1", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
+    draw.text((800, 150), "RANK", font=font_sub, fill=NEW_COLOR, anchor="mm")
 
     # ⭐ LEVEL
-    draw.text((1060, 45), f"{level:02d}", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
-    draw.text((1060, 105), "LEVEL", font=font_sub, fill=NEW_COLOR, anchor="mm")
+    draw.text((1060, 90), f"{level:02d}", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
+    draw.text((1060, 150), "LEVEL", font=font_sub, fill=NEW_COLOR, anchor="mm")
 
     # 📊 XP
     xp_text = f"{current_xp} XP / {next_level_xp} XP"
@@ -129,11 +119,11 @@ async def generate_rank_card(
 
     # 📈 شريط التقدم
     bar_x, bar_y = 285, 275
-    bar_width, bar_height = 830, 35
+    bar_width, bar_height = 830, 40
 
     draw.rounded_rectangle(
         [bar_x, bar_y, bar_x + bar_width, bar_y + bar_height],
-        radius=18,
+        radius=20,
         fill=(50, 53, 59, 255)
     )
 
@@ -143,7 +133,7 @@ async def generate_rank_card(
     if filled_width > 0:
         draw.rounded_rectangle(
             [bar_x, bar_y, bar_x + filled_width, bar_y + bar_height],
-            radius=18,
+            radius=20,
             fill=NEW_COLOR
         )
 
