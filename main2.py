@@ -25,23 +25,20 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 LEVEL_UP_CHANNEL_ID = 1535716236665683988 
 BOOST_XP_REWARD = 1000 
 
-# ✅ ID رتبة مستوى 35 (Central Key)
 CENTRAL_KEY_ROLE_ID = 1535724919705567284
 
-# جدول المستويات الأساسية المكتمل
 LEVEL_ROLES = {
-    5:  1535727707000672346,  # ✅ Level 5 (Red Key)
-    10: 1535729181969752289,  # ✅ Level 10 (Dark Key)
-    20: 1535718824069046415,  # ✅ Level 20 (Eleventh Key)
-    35: CENTRAL_KEY_ROLE_ID,  # ✅ Level 35 (Central Key)
-    50: 1535728454106873916   # ✅ Level 50 (The Elite Key)
+    5:  1535727707000672346,
+    10: 1535729181969752289,
+    20: 1535718824069046415,
+    35: CENTRAL_KEY_ROLE_ID,
+    50: 1535728454106873916
 }
 
-# IDs رتب الألوان المخصصة (المكتملة)
 COLOR_ROLES = {
-    "red": 1536363420423819325,    # ✅ ID رتبة اللون الأحمر
-    "purple": 1536363925111705640, # ✅ ID رتبة اللون البنفسجي
-    "blue": 1536364244004503572    # ✅ ID رتبة اللون الأزرق
+    "red": 1536363420423819325,
+    "purple": 1536363925111705640,
+    "blue": 1536364244004503572
 }
 
 # ==========================================
@@ -73,201 +70,85 @@ async def generate_rank_card(
     current_xp: int,
     next_level_xp: int
 ):
-    # حجم البطاقة الجديد
-    card = Image.new(
-        "RGBA",
-        (1200, 400),
-        color=(15, 16, 18, 255)
-    )
-
+    card = Image.new("RGBA", (1200, 400), color=(15, 16, 18, 255))
     draw = ImageDraw.Draw(card)
 
-    # ==========================================
-    # 🔤 إعداد الخطوط
-    # ==========================================
-    FONT_FILE = os.path.join(BASE_DIR, "font.ttf")
+    # 🔎 البحث التلقائي عن أي ملف خط موجود في المجلد لضمان قراءته
+    font_path = None
+    for file in os.listdir(BASE_DIR):
+        if file.lower().endswith(('.ttf', '.otf')):
+            font_path = os.path.join(BASE_DIR, file)
+            break
 
     try:
-        font_name = ImageFont.truetype(FONT_FILE, 55)   # اسم العضو
-        font_stats = ImageFont.truetype(FONT_FILE, 48)  # #1 والمستوى
-        font_sub = ImageFont.truetype(FONT_FILE, 90)    # RANK و LEVEL
-        font_xp = ImageFont.truetype(FONT_FILE, 32)     # XP
-
+        if font_path:
+            font_name = ImageFont.truetype(font_path, 55)   # اسم العضو
+            font_stats = ImageFont.truetype(font_path, 45)  # #1 والمستوى
+            font_sub = ImageFont.truetype(font_path, 32)    # RANK و LEVEL
+            font_xp = ImageFont.truetype(font_path, 30)     # XP
+        else:
+            print("⚠️ لم يتم العثور على ملف خط! تأكد من رفعه على GitHub بنفس المجلد.")
+            font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
     except Exception as e:
-        print(
-            f"⚠️ تحذير: لم يتم العثور على ملف الخط font.ttf، "
-            f"سيتم استخدام الخط الافتراضي: {e}"
-        )
+        print(f"⚠️ خطأ في قراءة الخط: {e}")
+        font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
 
-        font_name = ImageFont.load_default()
-        font_stats = ImageFont.load_default()
-        font_sub = ImageFont.load_default()
-        font_xp = ImageFont.load_default()
-
-    # ==========================================
-    # 🖼️ الصورة الشخصية
-    # ==========================================
+    # الصورة الشخصية
     avatar_url = member.display_avatar.with_format("png").url
-
-    req = urllib.request.Request(
-        avatar_url,
-        headers={"User-Agent": "Mozilla/5.0"}
-    )
-
+    req = urllib.request.Request(avatar_url, headers={"User-Agent": "Mozilla/5.0"})
     avatar_bytes = urllib.request.urlopen(req).read()
+    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
 
-    avatar = Image.open(
-        io.BytesIO(avatar_bytes)
-    ).convert("RGBA")
-
-    # حجم الصورة الشخصية الجديد
     avatar_size = (190, 190)
     avatar = avatar.resize(avatar_size)
 
-    # جعل الصورة دائرية
     mask = Image.new("L", avatar_size, 0)
-
     draw_mask = ImageDraw.Draw(mask)
+    draw_mask.ellipse((0, 0, avatar_size[0], avatar_size[1]), fill=255)
 
-    draw_mask.ellipse(
-        (0, 0, avatar_size[0], avatar_size[1]),
-        fill=255
-    )
+    card.paste(avatar, (55, 105), mask)
 
-    # وضع الصورة في الجهة اليسرى
-    card.paste(
-        avatar,
-        (55, 105),
-        mask
-    )
+    # اسم العضو
+    draw.text((285, 105), member.name, font=font_name, fill=(255, 255, 255, 255))
 
-    # ==========================================
-    # 👤 اسم العضو
-    # ==========================================
-    draw.text(
-        (285, 105),
-        member.name,
-        font=font_name,
-        fill=(255, 255, 255, 255)
-    )
-
-    # اللون الأساسي للعناصر
     NEW_COLOR = (188, 201, 247, 255)
 
-    # ==========================================
     # 🏆 RANK
-    # ==========================================
-    draw.text(
-        (850, 55),
-        "#1",
-        font=font_stats,
-        fill=(255, 255, 255, 255),
-        anchor="mm"
-    )
+    draw.text((800, 45), "#1", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
+    draw.text((800, 105), "RANK", font=font_sub, fill=NEW_COLOR, anchor="mm")
 
-    draw.text(
-        (850, 110),
-        "RANK",
-        font=font_sub,
-        fill=NEW_COLOR,
-        anchor="mm"
-    )
-
-    # ==========================================
     # ⭐ LEVEL
-    # ==========================================
-    draw.text(
-        (1070, 55),
-        f"{level:02d}",
-        font=font_stats,
-        fill=(255, 255, 255, 255),
-        anchor="mm"
-    )
+    draw.text((1060, 45), f"{level:02d}", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
+    draw.text((1060, 105), "LEVEL", font=font_sub, fill=NEW_COLOR, anchor="mm")
 
-    draw.text(
-        (1070, 110),
-        "LEVEL",
-        font=font_sub,
-        fill=NEW_COLOR,
-        anchor="mm"
-    )
-
-    # ==========================================
     # 📊 XP
-    # ==========================================
     xp_text = f"{current_xp} XP / {next_level_xp} XP"
+    draw.text((930, 225), xp_text, font=font_xp, fill=(200, 200, 200, 255), anchor="mm")
 
-    draw.text(
-        (850, 225),
-        xp_text,
-        font=font_xp,
-        fill=(200, 200, 200, 255),
-        anchor="mm"
-    )
-
-    # ==========================================
     # 📈 شريط التقدم
-    # ==========================================
-    bar_x = 285
-    bar_y = 275
+    bar_x, bar_y = 285, 275
+    bar_width, bar_height = 830, 35
 
-    bar_width = 830
-    bar_height = 35
-
-    # الخلفية
     draw.rounded_rectangle(
-        [
-            bar_x,
-            bar_y,
-            bar_x + bar_width,
-            bar_y + bar_height
-        ],
+        [bar_x, bar_y, bar_x + bar_width, bar_y + bar_height],
         radius=18,
         fill=(50, 53, 59, 255)
     )
 
-    # حساب نسبة التقدم
-    if next_level_xp > 0:
-        progress = min(
-            current_xp / next_level_xp,
-            1.0
-        )
-    else:
-        progress = 0
+    progress = min(current_xp / next_level_xp, 1.0) if next_level_xp > 0 else 0
+    filled_width = int(bar_width * progress)
 
-    filled_width = int(
-        bar_width * progress
-    )
-
-    # الجزء الممتلئ
     if filled_width > 0:
         draw.rounded_rectangle(
-            [
-                bar_x,
-                bar_y,
-                bar_x + filled_width,
-                bar_y + bar_height
-            ],
+            [bar_x, bar_y, bar_x + filled_width, bar_y + bar_height],
             radius=18,
             fill=NEW_COLOR
         )
 
-    # ==========================================
-    # 💾 حفظ البطاقة
-    # ==========================================
     buffer = io.BytesIO()
-
-    card.save(
-        buffer,
-        format="PNG"
-    )
-
+    card.save(buffer, format="PNG")
     buffer.seek(0)
-
-    return discord.File(
-        buffer,
-        filename="rank_card.png"
-    )
+    return discord.File(buffer, filename="rank_card.png")
 
 # ==========================================
 # 🚀 5. الأحداث (Events)
