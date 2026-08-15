@@ -72,21 +72,27 @@ async def generate_rank_card(
     card = Image.new("RGBA", (1200, 400), color=(15, 16, 18, 255))
     draw = ImageDraw.Draw(card)
 
-    # 📌 استخدام ملف roboto.ttf المرفوع في مشروعك مباشرة
-    font_path = os.path.join(BASE_DIR, "roboto.ttf")
+    # 🌐 مسار تنزيل الخط تلقائياً من Google Fonts لضمان القراءة
+    font_path = os.path.join(BASE_DIR, "Roboto-Bold.ttf")
+
+    if not os.path.exists(font_path):
+        try:
+            print("⏳ جاري تنزيل خط Roboto-Bold من Google Fonts...")
+            url = "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Bold.ttf"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req) as response, open(font_path, "wb") as out_file:
+                out_file.write(response.read())
+            print("✅ تم تنزيل الخط بنجاح!")
+        except Exception as e:
+            print(f"⚠️ فشل تنزيل الخط تلقائياً: {e}")
 
     try:
-        if os.path.exists(font_path):
-            font_name = ImageFont.truetype(font_path, 55)   # اسم العضو
-            font_stats = ImageFont.truetype(font_path, 45)  # الأرقام
-            font_sub = ImageFont.truetype(font_path, 35)    # RANK و LEVEL
-            font_xp = ImageFont.truetype(font_path, 30)     # XP
-            print("✅ تم العثور على roboto.ttf وتطبيق الأحجام الكبيرة!")
-        else:
-            print(f"❌ لم يتم العثور على roboto.ttf في: {font_path}")
-            font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
+        font_name = ImageFont.truetype(font_path, 55)   # اسم العضو
+        font_stats = ImageFont.truetype(font_path, 45)  # الأرقام
+        font_sub = ImageFont.truetype(font_path, 35)    # RANK و LEVEL
+        font_xp = ImageFont.truetype(font_path, 30)     # XP
     except Exception as e:
-        print(f"⚠️ خطأ أثناء قراءة الخط: {e}")
+        print(f"⚠️ يتعذر فتح الخط، استخدام الافتراضي: {e}")
         font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
 
     # الصورة الشخصية
