@@ -89,7 +89,7 @@ async def generate_rank_card(
     try:
         font_name = ImageFont.truetype(font_path, 55)   # اسم العضو
         font_stats = ImageFont.truetype(font_path, 45)  # الأرقام
-        font_sub = ImageFont.truetype(font_path, 35)    # RANK و LEVEL
+        font_sub = ImageFont.truetype(font_path, 90)    # RANK و LEVEL
         font_xp = ImageFont.truetype(font_path, 30)     # XP
     except Exception as e:
         print(f"⚠️ يتعذر فتح الخط، استخدام الافتراضي: {e}")
