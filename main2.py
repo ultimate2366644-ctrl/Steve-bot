@@ -72,29 +72,21 @@ async def generate_rank_card(
     card = Image.new("RGBA", (1200, 400), color=(15, 16, 18, 255))
     draw = ImageDraw.Draw(card)
 
-    # 🔎 البحث عن ملف الخط (.ttf أو .otf) المرفوع
-    font_path = None
-    for root, dirs, files in os.walk(BASE_DIR):
-        for file in files:
-            if file.lower().endswith(('.ttf', '.otf')):
-                font_path = os.path.join(root, file)
-                print(f"✅ تم العثور على خط: {file}")
-                break
-        if font_path:
-            break
+    # 📌 استخدام ملف roboto.ttf المرفوع في مشروعك مباشرة
+    font_path = os.path.join(BASE_DIR, "roboto.ttf")
 
     try:
-        if font_path:
-            # أحجام الخطوط العريضة
+        if os.path.exists(font_path):
             font_name = ImageFont.truetype(font_path, 55)   # اسم العضو
-            font_stats = ImageFont.truetype(font_path, 45)  # الأرقام (#1 والمستوى)
-            font_sub = ImageFont.truetype(font_path, 35)    # كلمتي RANK و LEVEL
-            font_xp = ImageFont.truetype(font_path, 30)     # نص الـ XP
+            font_stats = ImageFont.truetype(font_path, 45)  # الأرقام
+            font_sub = ImageFont.truetype(font_path, 35)    # RANK و LEVEL
+            font_xp = ImageFont.truetype(font_path, 30)     # XP
+            print("✅ تم العثور على roboto.ttf وتطبيق الأحجام الكبيرة!")
         else:
-            print("⚠️ لم يتم رصد أي ملف .ttf، التأكد من حفظه بنفس مجلد البوت.")
+            print(f"❌ لم يتم العثور على roboto.ttf في: {font_path}")
             font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
     except Exception as e:
-        print(f"⚠️ خطأ في قراءة الخط: {e}")
+        print(f"⚠️ خطأ أثناء قراءة الخط: {e}")
         font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
 
     # الصورة الشخصية
