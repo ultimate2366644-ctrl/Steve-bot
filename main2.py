@@ -72,15 +72,13 @@ async def generate_rank_card(
     card = Image.new("RGBA", (1200, 400), color=(15, 16, 18, 255))
     draw = ImageDraw.Draw(card)
 
-    # 📁 مسار ملف roboto.ttf الموجود في المستودع
     font_path = os.path.join(BASE_DIR, "roboto.ttf")
 
     try:
-        # 🔍 التكبير الأقصى للأحجام
-        font_name = ImageFont.truetype(font_path, 65)   # اسم العضو
-        font_stats = ImageFont.truetype(font_path, 55)  # أرقام #1 و 01
-        font_sub = ImageFont.truetype(font_path, 38)    # كلمتي RANK و LEVEL
-        font_xp = ImageFont.truetype(font_path, 36)     # نص الـ XP
+        font_name = ImageFont.truetype(font_path, 55)   # حجم متناسق لاسم العضو
+        font_stats = ImageFont.truetype(font_path, 50)  # أرقام #1 و 01
+        font_sub = ImageFont.truetype(font_path, 32)    # كلمتي RANK و LEVEL
+        font_xp = ImageFont.truetype(font_path, 34)     # نص الـ XP
     except Exception as e:
         print(f"⚠️ تعذر فتح ملف roboto.ttf: {e}")
         font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
@@ -101,21 +99,21 @@ async def generate_rank_card(
     card.paste(avatar, (50, 100), mask)
 
     # اسم العضو
-    draw.text((285, 125), member.name, font=font_name, fill=(255, 255, 255, 255))
+    draw.text((285, 150), member.name, font=font_name, fill=(255, 255, 255, 255))
 
     NEW_COLOR = (188, 201, 247, 255)
 
-    # 🏆 RANK
-    draw.text((800, 90), "#1", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
-    draw.text((800, 150), "RANK", font=font_sub, fill=NEW_COLOR, anchor="mm")
+    # 🏆 RANK (تم إزاحته لمنع التداخل مع الأسطر الطويلة)
+    draw.text((880, 80), "#1", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
+    draw.text((880, 135), "RANK", font=font_sub, fill=NEW_COLOR, anchor="mm")
 
     # ⭐ LEVEL
-    draw.text((1060, 90), f"{level:02d}", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
-    draw.text((1060, 150), "LEVEL", font=font_sub, fill=NEW_COLOR, anchor="mm")
+    draw.text((1080, 80), f"{level:02d}", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
+    draw.text((1080, 135), "LEVEL", font=font_sub, fill=NEW_COLOR, anchor="mm")
 
     # 📊 XP
     xp_text = f"{current_xp} XP / {next_level_xp} XP"
-    draw.text((930, 225), xp_text, font=font_xp, fill=(200, 200, 200, 255), anchor="mm")
+    draw.text((950, 225), xp_text, font=font_xp, fill=(200, 200, 200, 255), anchor="mm")
 
     # 📈 شريط التقدم
     bar_x, bar_y = 285, 275
