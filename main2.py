@@ -60,6 +60,9 @@ def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
+def get_next_level_xp(level: int) -> int:
+    return 5 * (level ** 2) + (50 * level) + 100
+
 # ==========================================
 # 🎨 4. دالة إنشاء بطاقة الـ Rank
 # ==========================================
@@ -75,12 +78,11 @@ async def generate_rank_card(
     font_path = os.path.join(BASE_DIR, "roboto.ttf")
 
     try:
-        font_name = ImageFont.truetype(font_path, 55)   # حجم متناسق لاسم العضو
-        font_stats = ImageFont.truetype(font_path, 50)  # أرقام #1 و 01
-        font_sub = ImageFont.truetype(font_path, 32)    # كلمتي RANK و LEVEL
-        font_xp = ImageFont.truetype(font_path, 34)     # نص الـ XP
+        font_name = ImageFont.truetype(font_path, 55)   
+        font_stats = ImageFont.truetype(font_path, 50)  
+        font_sub = ImageFont.truetype(font_path, 32)    
+        font_xp = ImageFont.truetype(font_path, 34)     
     except Exception as e:
-        print(f"⚠️ تعذر فتح ملف roboto.ttf: {e}")
         font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
 
     # الصورة الشخصية
@@ -103,7 +105,7 @@ async def generate_rank_card(
 
     NEW_COLOR = (188, 201, 247, 255)
 
-    # 🏆 RANK (تم إزاحته لمنع التداخل مع الأسطر الطويلة)
+    # 🏆 RANK
     draw.text((880, 80), "#1", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
     draw.text((880, 135), "RANK", font=font_sub, fill=NEW_COLOR, anchor="mm")
 
@@ -160,12 +162,12 @@ async def on_member_update(before: discord.Member, after: discord.Member):
         
         lvl = users[user_id]["level"]
         xp = users[user_id]["xp"]
-        next_level_xp = 5 * (lvl ** 2) + (50 * lvl) + 100
+        next_level_xp = get_next_level_xp(lvl)
 
         while xp >= next_level_xp:
             users[user_id]["level"] += 1
             lvl = users[user_id]["level"]
-            next_level_xp = 5 * (lvl ** 2) + (50 * lvl) + 100
+            next_level_xp = get_next_level_xp(lvl)
 
         save_data(users)
 
@@ -181,6 +183,12 @@ async def on_message(message):
     if message.author.bot or not message.guild:
         return
 
+    # 🛑 1. تنفيذ الأوامر مباشرة إذا بدأت الرسالة بـ ! وتجاوز إضافة الـ XP
+    if message.content.startswith("!"):
+        await bot.process_commands(message)
+        return
+
+    # 📊 2. حساب النقاط للرسائل العادية
     users = load_data()
     user_id = str(message.author.id)
 
@@ -191,31 +199,40 @@ async def on_message(message):
     xp = users[user_id]["xp"]
     lvl = users[user_id]["level"]
 
-    next_level_xp = 5 * (lvl ** 2) + (50 * lvl) + 100
+    next_level_xp = get_next_level_xp(lvl)
 
+    # 🏆 3. معالجة الارتقاء بالمستوى فقط عندما تنمو النقاط
     if xp >= next_level_xp:
-        users[user_id]["level"] += 1
+        # رفع المستوى حلقة بحلقة لتفادي التكرار
+        while users[user_id]["xp"] >= get_next_level_xp(users[user_id]["level"]):
+            users[user_id]["level"] += 1
+
         new_lvl = users[user_id]["level"]
-        
+        save_data(users) # حفظ فوري لتجنب تكرار الإشعار
+
         level_channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
-        target_channel = level_channel if level_channel else message.channel
+        new_next_xp = get_next_level_xp(new_lvl)
+        
+        if level_channel:
+            rank_file = await generate_rank_card(message.author, new_lvl, xp, new_next_xp)
+            await level_channel.send(
+                content=f"🎉 **مبروك {message.author.mention}!** ارتقيت إلى **المستوى {new_lvl}**!", 
+                file=rank_file
+            )
 
-        new_next_xp = 5 * (new_lvl ** 2) + (50 * new_lvl) + 100
-        rank_file = await generate_rank_card(message.author, new_lvl, xp, new_next_xp)
+            # إضافة الرتبة
+            if new_lvl in LEVEL_ROLES:
+                role_id = LEVEL_ROLES[new_lvl]
+                role = message.guild.get_role(role_id)
+                if role and role not in message.author.roles:
+                    try:
+                        await message.author.add_roles(role)
+                        await level_channel.send(f"🎖️ إنجاز رائع! حصلت على رتبة **{role.name}**!")
+                    except discord.Forbidden:
+                        print(f"⚠️ البوت يفتقر للترتيب/الصلاحيات لإعطاء رتبة {role.name}")
+    else:
+        save_data(users)
 
-        await target_channel.send(
-            content=f"🎉 **مبروك {message.author.mention}!** ارتقيت إلى **المستوى {new_lvl}**!", 
-            file=rank_file
-        )
-
-        if new_lvl in LEVEL_ROLES:
-            role_id = LEVEL_ROLES[new_lvl]
-            role = message.guild.get_role(role_id)
-            if role:
-                await message.author.add_roles(role)
-                await target_channel.send(f"🎖️ إنجاز رائع! حصلت على رتبة **{role.name}** لإنهاء المستوى {new_lvl}!")
-
-    save_data(users)
     await bot.process_commands(message)
 
 # ==========================================
@@ -230,8 +247,18 @@ async def rank(ctx, member: discord.Member = None):
     if user_id in users:
         lvl = users[user_id]["level"]
         xp = users[user_id]["xp"]
-        next_xp = 5 * (lvl ** 2) + (50 * lvl) + 100
+        next_xp = get_next_level_xp(lvl)
         
+        # التأكد من إعطاء الرتب المستحقة إن لم تكن لدى العضو
+        for target_lvl, role_id in LEVEL_ROLES.items():
+            if lvl >= target_lvl:
+                role = ctx.guild.get_role(role_id)
+                if role and role not in member.roles:
+                    try:
+                        await member.add_roles(role)
+                    except discord.Forbidden:
+                        pass
+
         async with ctx.typing():
             rank_file = await generate_rank_card(member, lvl, xp, next_xp)
             await ctx.send(content=f"📊 تفضل {member.mention}، هذه بطاقة التقدم والمستوى الخاصة بك:", file=rank_file)
