@@ -3,3 +3,4 @@ Pillow
 python-dotenv
 motor
 dnspython
+aiohttp
