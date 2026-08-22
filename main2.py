@@ -3,7 +3,7 @@ from discord.ext import commands
 import os
 from PIL import Image, ImageDraw, ImageFont
 import io
-import urllib.request
+import aiohttp
 from dotenv import load_dotenv
 import motor.motor_asyncio
 
@@ -88,9 +88,11 @@ async def generate_rank_card(
 
     if not os.path.exists(font_path):
         try:
-            url = "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf"
-            urllib.request.urlretrieve(url, font_path)
-            print("✅ تم تنزيل ملف الخط roboto.ttf بنجاح!")
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf") as resp:
+                    if resp.status == 200:
+                        with open(font_path, "wb") as f:
+                            f.write(await resp.read())
         except Exception as e:
             print(f"⚠️ فشل تنزيل ملف الخط: {e}")
 
@@ -102,11 +104,13 @@ async def generate_rank_card(
     except Exception:
         font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
 
+    # جلب صورة الأفاتار بشكل Async باستخدام aiohttp
     avatar_url = member.display_avatar.with_format("png").url
-    req = urllib.request.Request(avatar_url, headers={"User-Agent": "Mozilla/5.0"})
-    avatar_bytes = urllib.request.urlopen(req).read()
-    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
+    async with aiohttp.ClientSession() as session:
+        async with session.get(avatar_url) as resp:
+            avatar_bytes = await resp.read()
 
+    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
     avatar_size = (200, 200)
     avatar = avatar.resize(avatar_size)
 
