@@ -63,6 +63,13 @@ def save_data(data):
 def get_next_level_xp(level: int) -> int:
     return 5 * (level ** 2) + (50 * level) + 100
 
+def get_user_rank(user_id: str, users_data: dict) -> int:
+    sorted_users = sorted(users_data.items(), key=lambda x: x[1].get("xp", 0), reverse=True)
+    for index, (uid, _) in enumerate(sorted_users, start=1):
+        if uid == str(user_id):
+            return index
+    return 1
+
 # ==========================================
 # 🎨 4. دالة إنشاء بطاقة الـ Rank
 # ==========================================
@@ -70,14 +77,14 @@ async def generate_rank_card(
     member: discord.Member,
     level: int,
     current_xp: int,
-    next_level_xp: int
+    next_level_xp: int,
+    rank_position: int = 1
 ):
     card = Image.new("RGBA", (1200, 400), color=(15, 16, 18, 255))
     draw = ImageDraw.Draw(card)
 
     font_path = os.path.join(BASE_DIR, "roboto.ttf")
 
-    # 🔄 التحقق من وجود ملف الخط وتنزيله تلقائياً في حال عدم وجوده على السيرفر
     if not os.path.exists(font_path):
         try:
             url = "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf"
@@ -92,7 +99,6 @@ async def generate_rank_card(
         font_sub = ImageFont.truetype(font_path, 32)    
         font_xp = ImageFont.truetype(font_path, 34)     
     except Exception as e:
-        print(f"⚠️ تعذر تحميل الخط، يتم استخدام الخط الافتراضي: {e}")
         font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
 
     # الصورة الشخصية
@@ -115,8 +121,8 @@ async def generate_rank_card(
 
     NEW_COLOR = (188, 201, 247, 255)
 
-    # 🏆 RANK
-    draw.text((880, 80), "#1", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
+    # 🏆 RANK (الترتيب الديناميكي الحقيقي)
+    draw.text((880, 80), f"#{rank_position}", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
     draw.text((880, 135), "RANK", font=font_sub, fill=NEW_COLOR, anchor="mm")
 
     # ⭐ LEVEL
@@ -193,12 +199,10 @@ async def on_message(message):
     if message.author.bot or not message.guild:
         return
 
-    # 🛑 1. تنفيذ الأوامر مباشرة إذا بدأت الرسالة بـ ! وتجاوز إضافة الـ XP
     if message.content.startswith("!"):
         await bot.process_commands(message)
         return
 
-    # 📊 2. حساب النقاط للرسائل العادية
     users = load_data()
     user_id = str(message.author.id)
 
@@ -211,7 +215,6 @@ async def on_message(message):
 
     next_level_xp = get_next_level_xp(lvl)
 
-    # 🏆 3. معالجة الارتقاء بالمستوى فقط عندما تنمو النقاط
     if xp >= next_level_xp:
         while users[user_id]["xp"] >= get_next_level_xp(users[user_id]["level"]):
             users[user_id]["level"] += 1
@@ -223,7 +226,8 @@ async def on_message(message):
         new_next_xp = get_next_level_xp(new_lvl)
         
         if level_channel:
-            rank_file = await generate_rank_card(message.author, new_lvl, xp, new_next_xp)
+            user_rank = get_user_rank(user_id, users)
+            rank_file = await generate_rank_card(message.author, new_lvl, xp, new_next_xp, rank_position=user_rank)
             await level_channel.send(
                 content=f"🎉 **مبروك {message.author.mention}!** ارتقيت إلى **المستوى {new_lvl}**!", 
                 file=rank_file
@@ -256,6 +260,7 @@ async def rank(ctx, member: discord.Member = None):
         lvl = users[user_id]["level"]
         xp = users[user_id]["xp"]
         next_xp = get_next_level_xp(lvl)
+        user_rank = get_user_rank(user_id, users)
         
         for target_lvl, role_id in LEVEL_ROLES.items():
             if lvl >= target_lvl:
@@ -267,7 +272,7 @@ async def rank(ctx, member: discord.Member = None):
                         pass
 
         async with ctx.typing():
-            rank_file = await generate_rank_card(member, lvl, xp, next_xp)
+            rank_file = await generate_rank_card(member, lvl, xp, next_xp, rank_position=user_rank)
             await ctx.send(content=f"📊 تفضل {member.mention}، هذه بطاقة التقدم والمستوى الخاصة بك:", file=rank_file)
     else:
         await ctx.send(f"ليس لدى {member.name} أي نقاط XP حتى الآن، ابدأ بالدردشة أولاً!")
