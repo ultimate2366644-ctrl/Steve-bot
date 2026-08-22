@@ -210,7 +210,7 @@ async def on_message(message):
     user_id = str(message.author.id)
     user_data = await get_user_data(user_id)
 
-    xp = user_data["xp"] + 15
+    xp = user_data["xp"] + 5
     lvl = user_data["level"]
     next_level_xp = get_next_level_xp(lvl)
 
