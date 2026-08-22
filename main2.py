@@ -1,11 +1,11 @@
 import discord
 from discord.ext import commands
-import json
 import os
 from PIL import Image, ImageDraw, ImageFont
 import io
 import urllib.request
 from dotenv import load_dotenv
+from pymongo import MongoClient
 
 load_dotenv()
 
@@ -41,33 +41,43 @@ COLOR_ROLES = {
 }
 
 # ==========================================
-# 💾 3. إدارة ملف حفظ البيانات (JSON)
+# 🍃 3. الاتصال بـ MongoDB وإدارة البيانات
 # ==========================================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "users_xp.json")
+MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    print("❌ Error: MONGO_URI is missing in environment variables!")
 
-def load_data():
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"⚠️ Error loading JSON data: {e}")
-            return {}
-    return {}
+cluster = MongoClient(MONGO_URI)
+db = cluster["DiscordBot"]
+collection = db["users_xp"]
 
-def save_data(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+def get_user_data(user_id: str):
+    data = collection.find_one({"_id": str(user_id)})
+    if not data:
+        return {"_id": str(user_id), "xp": 0, "level": 1}
+    return data
+
+def update_user_data(user_id: str, xp: int, level: int):
+    collection.update_one(
+        {"_id": str(user_id)},
+        {"$set": {"xp": xp, "level": level}},
+        upsert=True
+    )
 
 def get_next_level_xp(level: int) -> int:
     return 5 * (level ** 2) + (50 * level) + 100
 
-def get_user_rank(user_id: str, users_data: dict) -> int:
-    sorted_users = sorted(users_data.items(), key=lambda x: x[1].get("xp", 0), reverse=True)
-    for index, (uid, _) in enumerate(sorted_users, start=1):
-        if uid == str(user_id):
-            return index
+def get_user_rank(user_id: str) -> int:
+    # ترتيب المستخدمين في MongoDB حسب الـ XP
+    pipeline = [
+        {"$sort": {"xp": -1}},
+        {"$group": {"_id": None, "users": {"$push": "$_id"}}}
+    ]
+    result = list(collection.aggregate(pipeline))
+    if result and "users" in result[0]:
+        users_list = result[0]["users"]
+        if str(user_id) in users_list:
+            return users_list.index(str(user_id)) + 1
     return 1
 
 # ==========================================
@@ -83,6 +93,7 @@ async def generate_rank_card(
     card = Image.new("RGBA", (1200, 400), color=(15, 16, 18, 255))
     draw = ImageDraw.Draw(card)
 
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     font_path = os.path.join(BASE_DIR, "roboto.ttf")
 
     if not os.path.exists(font_path):
@@ -101,7 +112,6 @@ async def generate_rank_card(
     except Exception as e:
         font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
 
-    # الصورة الشخصية
     avatar_url = member.display_avatar.with_format("png").url
     req = urllib.request.Request(avatar_url, headers={"User-Agent": "Mozilla/5.0"})
     avatar_bytes = urllib.request.urlopen(req).read()
@@ -116,24 +126,19 @@ async def generate_rank_card(
 
     card.paste(avatar, (50, 100), mask)
 
-    # اسم العضو
     draw.text((285, 150), member.name, font=font_name, fill=(255, 255, 255, 255))
 
     NEW_COLOR = (188, 201, 247, 255)
 
-    # 🏆 RANK (الترتيب الديناميكي الحقيقي)
     draw.text((880, 80), f"#{rank_position}", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
     draw.text((880, 135), "RANK", font=font_sub, fill=NEW_COLOR, anchor="mm")
 
-    # ⭐ LEVEL
     draw.text((1080, 80), f"{level:02d}", font=font_stats, fill=(255, 255, 255, 255), anchor="mm")
     draw.text((1080, 135), "LEVEL", font=font_sub, fill=NEW_COLOR, anchor="mm")
 
-    # 📊 XP
     xp_text = f"{current_xp} XP / {next_level_xp} XP"
     draw.text((950, 225), xp_text, font=font_xp, fill=(200, 200, 200, 255), anchor="mm")
 
-    # 📈 شريط التقدم
     bar_x, bar_y = 285, 275
     bar_width, bar_height = 830, 40
 
@@ -164,28 +169,23 @@ async def generate_rank_card(
 @bot.event
 async def on_ready():
     print(f"✅ تم تسجيل الدخول بنجاح باسم البوت: {bot.user.name}")
+    print("🍃 متصل بقاعدة بيانات MongoDB بنجاح!")
 
 @bot.event
 async def on_member_update(before: discord.Member, after: discord.Member):
     if before.premium_since is None and after.premium_since is not None:
-        users = load_data()
         user_id = str(after.id)
+        user_data = get_user_data(user_id)
 
-        if user_id not in users:
-            users[user_id] = {"xp": 0, "level": 1}
-
-        users[user_id]["xp"] += BOOST_XP_REWARD
-        
-        lvl = users[user_id]["level"]
-        xp = users[user_id]["xp"]
+        xp = user_data["xp"] + BOOST_XP_REWARD
+        lvl = user_data["level"]
         next_level_xp = get_next_level_xp(lvl)
 
         while xp >= next_level_xp:
-            users[user_id]["level"] += 1
-            lvl = users[user_id]["level"]
+            lvl += 1
             next_level_xp = get_next_level_xp(lvl)
 
-        save_data(users)
+        update_user_data(user_id, xp, lvl)
 
         level_channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
         if level_channel:
@@ -203,38 +203,32 @@ async def on_message(message):
         await bot.process_commands(message)
         return
 
-    users = load_data()
     user_id = str(message.author.id)
+    user_data = get_user_data(user_id)
 
-    if user_id not in users:
-        users[user_id] = {"xp": 0, "level": 1}
-
-    users[user_id]["xp"] += 15
-    xp = users[user_id]["xp"]
-    lvl = users[user_id]["level"]
-
+    xp = user_data["xp"] + 15
+    lvl = user_data["level"]
     next_level_xp = get_next_level_xp(lvl)
 
     if xp >= next_level_xp:
-        while users[user_id]["xp"] >= get_next_level_xp(users[user_id]["level"]):
-            users[user_id]["level"] += 1
+        while xp >= get_next_level_xp(lvl):
+            lvl += 1
 
-        new_lvl = users[user_id]["level"]
-        save_data(users)
+        update_user_data(user_id, xp, lvl)
 
         level_channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
-        new_next_xp = get_next_level_xp(new_lvl)
+        new_next_xp = get_next_level_xp(lvl)
         
         if level_channel:
-            user_rank = get_user_rank(user_id, users)
-            rank_file = await generate_rank_card(message.author, new_lvl, xp, new_next_xp, rank_position=user_rank)
+            user_rank = get_user_rank(user_id)
+            rank_file = await generate_rank_card(message.author, lvl, xp, new_next_xp, rank_position=user_rank)
             await level_channel.send(
-                content=f"🎉 **مبروك {message.author.mention}!** ارتقيت إلى **المستوى {new_lvl}**!", 
+                content=f"🎉 **مبروك {message.author.mention}!** ارتقيت إلى **المستوى {lvl}**!", 
                 file=rank_file
             )
 
-            if new_lvl in LEVEL_ROLES:
-                role_id = LEVEL_ROLES[new_lvl]
+            if lvl in LEVEL_ROLES:
+                role_id = LEVEL_ROLES[lvl]
                 role = message.guild.get_role(role_id)
                 if role and role not in message.author.roles:
                     try:
@@ -243,7 +237,7 @@ async def on_message(message):
                     except discord.Forbidden:
                         print(f"⚠️ البوت يفتقر للترتيب/الصلاحيات لإعطاء رتبة {role.name}")
     else:
-        save_data(users)
+        update_user_data(user_id, xp, lvl)
 
     await bot.process_commands(message)
 
@@ -253,29 +247,61 @@ async def on_message(message):
 @bot.command()
 async def rank(ctx, member: discord.Member = None):
     member = member or ctx.author
-    users = load_data()
     user_id = str(member.id)
+    user_data = get_user_data(user_id)
 
-    if user_id in users:
-        lvl = users[user_id]["level"]
-        xp = users[user_id]["xp"]
-        next_xp = get_next_level_xp(lvl)
-        user_rank = get_user_rank(user_id, users)
+    lvl = user_data["level"]
+    xp = user_data["xp"]
+    next_xp = get_next_level_xp(lvl)
+    user_rank = get_user_rank(user_id)
+    
+    for target_lvl, role_id in LEVEL_ROLES.items():
+        if lvl >= target_lvl:
+            role = ctx.guild.get_role(role_id)
+            if role and role not in member.roles:
+                try:
+                    await member.add_roles(role)
+                except discord.Forbidden:
+                    pass
+
+    async with ctx.typing():
+        rank_file = await generate_rank_card(member, lvl, xp, next_xp, rank_position=user_rank)
+        await ctx.send(content=f"📊 تفضل {member.mention}، هذه بطاقة التقدم والمستوى الخاصة بك:", file=rank_file)
+
+@bot.command(name="top", aliases=["leaderboard", "lb"])
+async def leaderboard(ctx):
+    # جلب أول 10 أعضاء مرتبين تنازلياً حسب الـ XP من MongoDB مباشرة
+    top_users = list(collection.find().sort("xp", -1).limit(10))
+
+    if not top_users:
+        await ctx.send("❌ لا توجد بيانات مسجلة للأعضاء حتى الآن!")
+        return
+
+    embed = discord.Embed(
+        title="🏆 **لوحة متصدري السيرفر (Top 10)**",
+        description="أعلى الأعضاء من حيث نقاط الـ XP والمستوى:",
+        color=discord.Color.gold()
+    )
+
+    medals = ["🥇", "🥈", "🥉"]
+
+    description_text = ""
+    for index, doc in enumerate(top_users, start=1):
+        user_id = doc["_id"]
+        user = ctx.guild.get_member(int(user_id))
+        username = user.mention if user else f"عضو مغادر (`{user_id}`)"
         
-        for target_lvl, role_id in LEVEL_ROLES.items():
-            if lvl >= target_lvl:
-                role = ctx.guild.get_role(role_id)
-                if role and role not in member.roles:
-                    try:
-                        await member.add_roles(role)
-                    except discord.Forbidden:
-                        pass
+        rank_icon = medals[index - 1] if index <= 3 else f"`#{index}`"
+        
+        xp = doc.get("xp", 0)
+        level = doc.get("level", 1)
 
-        async with ctx.typing():
-            rank_file = await generate_rank_card(member, lvl, xp, next_xp, rank_position=user_rank)
-            await ctx.send(content=f"📊 تفضل {member.mention}، هذه بطاقة التقدم والمستوى الخاصة بك:", file=rank_file)
-    else:
-        await ctx.send(f"ليس لدى {member.name} أي نقاط XP حتى الآن، ابدأ بالدردشة أولاً!")
+        description_text += f"{rank_icon} **{username}** — **المستوى:** `{level}` | **XP:** `{xp:,}`\n"
+
+    embed.description = description_text
+    embed.set_footer(text=f"طلب بواسطة: {ctx.author.display_name}", icon_url=ctx.author.display_avatar.url)
+
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def color(ctx, choice: str = None):
