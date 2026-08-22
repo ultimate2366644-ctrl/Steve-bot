@@ -81,7 +81,7 @@ async def generate_rank_card(user, level, xp, next_xp, rank_num):
         avatar_asset = user.display_avatar.with_format("png").with_size(128)
         avatar_bytes = await avatar_asset.read()
     except Exception as e:
-        print(f"⚠️ تعذر تحميل أفتار المستخدم: {e}")
+        print(f"⚠️ لم يتم جلب الأفتار: {e}")
 
     def draw_card():
         width, height = 800, 250
@@ -103,20 +103,24 @@ async def generate_rank_card(user, level, xp, next_xp, rank_num):
         else:
             draw.ellipse((50, 55, 190, 195), fill=(50, 55, 65))
 
-        # قراءة الخطوط بأمان (استخدام Roboto)
-        try:
-            font_title = ImageFont.truetype("Roboto-Bold.ttf", 32)
-            font_sub = ImageFont.truetype("Roboto-Regular.ttf", 22)
-        except:
-            try:
-                font_title = ImageFont.truetype("Roboto.ttf", 32)
-                font_sub = ImageFont.truetype("Roboto.ttf", 22)
-            except:
-                font_title = ImageFont.load_default()
-                font_sub = font_title
+        # 🎯 تحديد مسار ملف الخط بدقة في مجلد المشروع
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # استبدل "Roboto-Bold.ttf" باسم ملف الخط المرفوع لديك على GitHub تماماً
+        font_path = os.path.join(base_dir, "Roboto-Bold.ttf")
 
-        draw.text((210, 60), f"{user.display_name}", font=font_title, fill=(255, 255, 255))
-        draw.text((210, 105), f"Rank: #{rank_num}  |  Level: {level}", font=font_sub, fill=(188, 201, 247))
+        try:
+            font_title = ImageFont.truetype(font_path, 32)
+            font_sub = ImageFont.truetype(font_path, 22)
+            print("✅ تم تحميل الخط بنجاح!")
+        except Exception as e:
+            print(f"❌ لم يتم العثور على الخط في المسار: {font_path} | الخطأ: {e}")
+            font_title = ImageFont.load_default()
+            font_sub = font_title
+
+        # إضافة النصوص
+        draw.text((210, 55), f"{user.display_name}", font=font_title, fill=(255, 255, 255))
+        draw.text((210, 100), f"Rank: #{rank_num}  |  Level: {level}", font=font_sub, fill=(188, 201, 247))
 
         # شريط التقدم (Progress Bar)
         bar_x, bar_y, bar_w, bar_h = 210, 150, 530, 25
@@ -138,7 +142,7 @@ async def generate_rank_card(user, level, xp, next_xp, rank_num):
         buffer.seek(0)
         return buffer
 
-    # تنفيذ عملية المعالجة الرسم في الخفاء لمنع تجميد البوت
+    # تشغيل عملية الرسم في الخفاء لمنع تعليق البوت
     loop = asyncio.get_event_loop()
     buffer = await loop.run_in_executor(None, draw_card)
     return discord.File(buffer, filename="rank.png")
