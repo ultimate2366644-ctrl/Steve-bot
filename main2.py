@@ -1,5 +1,6 @@
 import os
 import io
+import asyncio
 import discord
 from discord.ext import commands
 from pymongo import MongoClient
@@ -14,9 +15,13 @@ MONGO_URI = os.getenv("MONGO_URI")
 LEVEL_UP_CHANNEL_ID = 123456789012345678  # استبدله بـ ID روم الترقية
 
 # الاتصال بقاعدة البيانات MongoDB
-cluster = MongoClient(MONGO_URI)
-db = cluster["DiscordBot"]
-collection = db["users_xp"]
+try:
+    cluster = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    db = cluster["DiscordBot"]
+    collection = db["users_xp"]
+    print("✅ تم الاتصال بقاعدة البيانات بنجاح!")
+except Exception as e:
+    print(f"❌ خطأ في الاتصال بقاعدة البيانات: {e}")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -37,17 +42,23 @@ LEVEL_ROLES = {
 def load_data():
     """قراءة جميع بيانات المستخدمين من MongoDB"""
     users = {}
-    for doc in collection.find():
-        users[doc["_id"]] = {"xp": doc["xp"], "level": doc["level"]}
+    try:
+        for doc in collection.find():
+            users[str(doc["_id"])] = {"xp": doc.get("xp", 0), "level": doc.get("level", 1)}
+    except Exception as e:
+        print(f"⚠️ خطأ أثناء جلب البيانات: {e}")
     return users
 
 def save_user_data(user_id, xp, level):
     """حفظ أو تحديث بيانات مستخدم واحد في MongoDB"""
-    collection.update_one(
-        {"_id": user_id},
-        {"$set": {"xp": xp, "level": level}},
-        upsert=True
-    )
+    try:
+        collection.update_one(
+            {"_id": str(user_id)},
+            {"$set": {"xp": xp, "level": level}},
+            upsert=True
+        )
+    except Exception as e:
+        print(f"⚠️ خطأ أثناء حفظ البيانات: {e}")
 
 def get_next_level_xp(level):
     """معادلة حساب الـ XP المطلوب للمستوى التالي"""
@@ -57,7 +68,7 @@ def get_user_rank(user_id, users):
     """حساب ترتيب العضو بين باقي الأعضاء"""
     sorted_users = sorted(users.items(), key=lambda x: x[1]['xp'], reverse=True)
     for rank, (u_id, _) in enumerate(sorted_users, 1):
-        if u_id == user_id:
+        if u_id == str(user_id):
             return rank
     return 1
 
@@ -65,58 +76,75 @@ def get_user_rank(user_id, users):
 # 3. توليد صور البطاقات (Rank Card)
 # ---------------------------------------------------------
 async def generate_rank_card(user, level, xp, next_xp, rank_num):
-    width, height = 800, 250
-    image = Image.new("RGBA", (width, height), (15, 16, 18, 255))
-    draw = ImageDraw.Draw(image)
-
-    # خلفية البطاقة الداخلية
-    draw.rounded_rectangle((20, 20, width - 20, height - 20), radius=20, fill=(24, 26, 32, 255))
-
-    # جلب صورة الأفتار
-    avatar_asset = user.display_avatar.with_format("png").with_size(128)
-    avatar_bytes = await avatar_asset.read()
-    avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
-    avatar_img = avatar_img.resize((140, 140))
-
-    # قص الأفتار بشكل دائري
-    mask = Image.new("L", (140, 140), 0)
-    draw_mask = ImageDraw.Draw(mask)
-    draw_mask.ellipse((0, 0, 140, 140), fill=255)
-    image.paste(avatar_img, (50, 55), mask)
-
-    # إضافة النصوص
+    avatar_bytes = None
     try:
-        font_title = ImageFont.truetype("arial.ttf", 32)
-        font_sub = ImageFont.truetype("arial.ttf", 22)
-    except:
-        font_title = ImageFont.load_default()
-        font_sub = font_title
+        avatar_asset = user.display_avatar.with_format("png").with_size(128)
+        avatar_bytes = await avatar_asset.read()
+    except Exception as e:
+        print(f"⚠️ تعذر تحميل أفتار المستخدم: {e}")
 
-    draw.text((210, 60), f"{user.display_name}", font=font_title, fill=(255, 255, 255))
-    draw.text((210, 105), f"Rank: #{rank_num}  |  Level: {level}", font=font_sub, fill=(188, 201, 247))
+    def draw_card():
+        width, height = 800, 250
+        image = Image.new("RGBA", (width, height), (15, 16, 18, 255))
+        draw = ImageDraw.Draw(image)
 
-    # شريط التقدم (Progress Bar)
-    bar_x, bar_y, bar_w, bar_h = 210, 150, 530, 25
-    draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=12, fill=(40, 44, 52))
+        # خلفية البطاقة الداخلية
+        draw.rounded_rectangle((20, 20, width - 20, height - 20), radius=20, fill=(24, 26, 32, 255))
 
-    current_lvl_xp = get_next_level_xp(level - 1) if level > 1 else 0
-    xp_in_level = xp - current_lvl_xp
-    needed_in_level = next_xp - current_lvl_xp
-    progress = min(1.0, max(0.0, xp_in_level / needed_in_level))
+        # معالجة الأفتار وقصه بشكل دائري
+        if avatar_bytes:
+            avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
+            avatar_img = avatar_img.resize((140, 140))
 
-    if progress > 0:
-        fill_w = int(bar_w * progress)
-        draw.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=12, fill=(188, 201, 247))
+            mask = Image.new("L", (140, 140), 0)
+            draw_mask = ImageDraw.Draw(mask)
+            draw_mask.ellipse((0, 0, 140, 140), fill=255)
+            image.paste(avatar_img, (50, 55), mask)
+        else:
+            draw.ellipse((50, 55, 190, 195), fill=(50, 55, 65))
 
-    draw.text((bar_x + bar_w - 120, bar_y - 28), f"{xp} / {next_xp} XP", font=font_sub, fill=(200, 200, 200))
+        # قراءة الخطوط بأمان (استخدام Roboto)
+        try:
+            font_title = ImageFont.truetype("Roboto-Bold.ttf", 32)
+            font_sub = ImageFont.truetype("Roboto-Regular.ttf", 22)
+        except:
+            try:
+                font_title = ImageFont.truetype("Roboto.ttf", 32)
+                font_sub = ImageFont.truetype("Roboto.ttf", 22)
+            except:
+                font_title = ImageFont.load_default()
+                font_sub = font_title
 
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG")
-    buffer.seek(0)
+        draw.text((210, 60), f"{user.display_name}", font=font_title, fill=(255, 255, 255))
+        draw.text((210, 105), f"Rank: #{rank_num}  |  Level: {level}", font=font_sub, fill=(188, 201, 247))
+
+        # شريط التقدم (Progress Bar)
+        bar_x, bar_y, bar_w, bar_h = 210, 150, 530, 25
+        draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=12, fill=(40, 44, 52))
+
+        current_lvl_xp = get_next_level_xp(level - 1) if level > 1 else 0
+        xp_in_level = xp - current_lvl_xp
+        needed_in_level = next_xp - current_lvl_xp
+        progress = min(1.0, max(0.0, xp_in_level / needed_in_level)) if needed_in_level > 0 else 0
+
+        if progress > 0:
+            fill_w = int(bar_w * progress)
+            draw.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=12, fill=(188, 201, 247))
+
+        draw.text((bar_x + bar_w - 140, bar_y - 28), f"{xp} / {next_xp} XP", font=font_sub, fill=(200, 200, 200))
+
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        buffer.seek(0)
+        return buffer
+
+    # تنفيذ عملية المعالجة الرسم في الخفاء لمنع تجميد البوت
+    loop = asyncio.get_event_loop()
+    buffer = await loop.run_in_executor(None, draw_card)
     return discord.File(buffer, filename="rank.png")
 
 # ---------------------------------------------------------
-# 4. الأحداث (Events) والأوامر
+# 4. الأحداث (Events)
 # ---------------------------------------------------------
 @bot.event
 async def on_ready():
@@ -127,17 +155,19 @@ async def on_message(message):
     if message.author.bot or not message.guild:
         return
 
+    # معالجة الأوامر أولاً والتوقف لتفادي التكرار
     if message.content.startswith("!"):
         await bot.process_commands(message)
         return
 
-    users = load_data()
+    loop = asyncio.get_event_loop()
+    users = await loop.run_in_executor(None, load_data)
     user_id = str(message.author.id)
 
     if user_id not in users:
         users[user_id] = {"xp": 0, "level": 1}
 
-    # 🔥 منح 5 نقاط XP فقط عن كل رسالة
+    # منح 5 نقاط XP لكل رسالة
     users[user_id]["xp"] += 5
     xp = users[user_id]["xp"]
     lvl = users[user_id]["level"]
@@ -150,7 +180,7 @@ async def on_message(message):
             users[user_id]["level"] += 1
 
         new_lvl = users[user_id]["level"]
-        save_user_data(user_id, xp, new_lvl)
+        await loop.run_in_executor(None, save_user_data, user_id, xp, new_lvl)
 
         level_channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
         new_next_xp = get_next_level_xp(new_lvl)
@@ -173,15 +203,19 @@ async def on_message(message):
                     except discord.Forbidden:
                         print(f"⚠️ يفتقر البوت إلى صلاحيات إعطاء رتبة {role.name}")
     else:
-        save_user_data(user_id, xp, lvl)
+        await loop.run_in_executor(None, save_user_data, user_id, xp, lvl)
 
-    await bot.process_commands(message)
+# ---------------------------------------------------------
+# 5. الأوامر (Commands)
+# ---------------------------------------------------------
 
 # أمر عرض البطاقة الشخصية
-@bot.command()
+@bot.command(name="rank")
 async def rank(ctx, member: discord.Member = None):
     member = member or ctx.author
-    users = load_data()
+    
+    loop = asyncio.get_event_loop()
+    users = await loop.run_in_executor(None, load_data)
     user_id = str(member.id)
 
     user_data = users.get(user_id, {"xp": 0, "level": 1})
@@ -192,5 +226,35 @@ async def rank(ctx, member: discord.Member = None):
 
     rank_file = await generate_rank_card(member, lvl, xp, next_xp, rank_num=user_rank)
     await ctx.send(file=rank_file)
+
+# أمر عرض قائمة المتصدرين
+@bot.command(name="leaderboard", aliases=["lb"])
+async def leaderboard(ctx):
+    loop = asyncio.get_event_loop()
+    users = await loop.run_in_executor(None, load_data)
+
+    if not users:
+        await ctx.send("📋 لا توجد بيانات مسجلة في لوحة النتائج حتى الآن.")
+        return
+
+    sorted_users = sorted(users.items(), key=lambda x: x[1]['xp'], reverse=True)[:10]
+
+    embed = discord.Embed(
+        title="🏆 لوحة النتائج (أعلى 10 متصدرين)",
+        color=discord.Color.gold()
+    )
+
+    for rank_num, (user_id, data) in enumerate(sorted_users, 1):
+        member = ctx.guild.get_member(int(user_id))
+        name = member.display_name if member else f"مستخدم مغادر ({user_id})"
+        
+        medal = "🥇" if rank_num == 1 else "🥈" if rank_num == 2 else "🥉" if rank_num == 3 else f"#{rank_num}"
+        embed.add_field(
+            name=f"{medal} {name}",
+            value=f"**المستوى:** {data['level']} | **XP:** {data['xp']}",
+            inline=False
+        )
+
+    await ctx.send(embed=embed)
 
 bot.run(TOKEN)
