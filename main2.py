@@ -70,7 +70,7 @@ def get_user_rank(user_id, users):
 # 3. توليد صور البطاقات (Rank Card)
 # ---------------------------------------------------------
 async def generate_rank_card(user, level, xp, next_xp, rank_num):
-    width, height = 800, 250
+    width, height = 1200, 400
     image = Image.new("RGBA", (width, height), (15, 16, 18, 255))
     draw = ImageDraw.Draw(image)
 
