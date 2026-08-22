@@ -71,81 +71,59 @@ def get_user_rank(user_id, users):
         if u_id == str(user_id):
             return rank
     return 1
-
 # ---------------------------------------------------------
 # 3. توليد صور البطاقات (Rank Card)
 # ---------------------------------------------------------
 async def generate_rank_card(user, level, xp, next_xp, rank_num):
-    avatar_bytes = None
-    try:
-        avatar_asset = user.display_avatar.with_format("png").with_size(128)
-        avatar_bytes = await avatar_asset.read()
-    except Exception as e:
-        print(f"⚠️ لم يتم جلب الأفتار: {e}")
+    width, height = 800, 250
+    image = Image.new("RGBA", (width, height), (15, 16, 18, 255))
+    draw = ImageDraw.Draw(image)
 
-    def draw_card():
-        width, height = 800, 250
-        image = Image.new("RGBA", (width, height), (15, 16, 18, 255))
-        draw = ImageDraw.Draw(image)
+    # خلفية البطاقة الداخلية
+    draw.rounded_rectangle((20, 20, width - 20, height - 20), radius=20, fill=(24, 26, 32, 255))
 
-        # خلفية البطاقة الداخلية
-        draw.rounded_rectangle((20, 20, width - 20, height - 20), radius=20, fill=(24, 26, 32, 255))
+    # جلب صورة الأفتار
+    avatar_asset = user.display_avatar.with_format("png").with_size(128)
+    avatar_bytes = await avatar_asset.read()
+    avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
+    avatar_img = avatar_img.resize((140, 140))
 
-        # معالجة الأفتار وقصه بشكل دائري
-        if avatar_bytes:
-            avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
-            avatar_img = avatar_img.resize((140, 140))
+    # قص الأفتار بشكل دائري
+    mask = Image.new("L", (140, 140), 0)
+    draw_mask = ImageDraw.Draw(mask)
+    draw_mask.ellipse((0, 0, 140, 140), fill=255)
+    image.paste(avatar_img, (50, 55), mask)
 
-            mask = Image.new("L", (140, 140), 0)
-            draw_mask = ImageDraw.Draw(mask)
-            draw_mask.ellipse((0, 0, 140, 140), fill=255)
-            image.paste(avatar_img, (50, 55), mask)
-        else:
-            draw.ellipse((50, 55, 190, 195), fill=(50, 55, 65))
+    # إضافة النصوص
+    try:
+        font_title = ImageFont.truetype("arial.ttf", 32)
+        font_sub = ImageFont.truetype("arial.ttf", 22)
+    except:
+        font_title = ImageFont.load_default()
+        font_sub = font_title
 
-        # 🎯 تحديد مسار ملف الخط بدقة في مجلد المشروع
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        
-        # استبدل "Roboto-Bold.ttf" باسم ملف الخط المرفوع لديك على GitHub تماماً
-        font_path = os.path.join(base_dir, "Roboto-Bold.ttf")
+    draw.text((210, 60), f"{user.display_name}", font=font_title, fill=(255, 255, 255))
+    draw.text((210, 105), f"Rank: #{rank_num}  |  Level: {level}", font=font_sub, fill=(188, 201, 247))
 
-        try:
-            font_title = ImageFont.truetype(font_path, 32)
-            font_sub = ImageFont.truetype(font_path, 22)
-            print("✅ تم تحميل الخط بنجاح!")
-        except Exception as e:
-            print(f"❌ لم يتم العثور على الخط في المسار: {font_path} | الخطأ: {e}")
-            font_title = ImageFont.load_default()
-            font_sub = font_title
+    # شريط التقدم (Progress Bar)
+    bar_x, bar_y, bar_w, bar_h = 210, 150, 530, 25
+    draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=12, fill=(40, 44, 52))
 
-        # إضافة النصوص
-        draw.text((210, 55), f"{user.display_name}", font=font_title, fill=(255, 255, 255))
-        draw.text((210, 100), f"Rank: #{rank_num}  |  Level: {level}", font=font_sub, fill=(188, 201, 247))
+    current_lvl_xp = get_next_level_xp(level - 1) if level > 1 else 0
+    xp_in_level = xp - current_lvl_xp
+    needed_in_level = next_xp - current_lvl_xp
+    progress = min(1.0, max(0.0, xp_in_level / needed_in_level))
 
-        # شريط التقدم (Progress Bar)
-        bar_x, bar_y, bar_w, bar_h = 210, 150, 530, 25
-        draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=12, fill=(40, 44, 52))
+    if progress > 0:
+        fill_w = int(bar_w * progress)
+        draw.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=12, fill=(188, 201, 247))
 
-        current_lvl_xp = get_next_level_xp(level - 1) if level > 1 else 0
-        xp_in_level = xp - current_lvl_xp
-        needed_in_level = next_xp - current_lvl_xp
-        progress = min(1.0, max(0.0, xp_in_level / needed_in_level)) if needed_in_level > 0 else 0
+    draw.text((bar_x + bar_w - 120, bar_y - 28), f"{xp} / {next_xp} XP", font=font_sub, fill=(200, 200, 200))
 
-        if progress > 0:
-            fill_w = int(bar_w * progress)
-            draw.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=12, fill=(188, 201, 247))
-
-        draw.text((bar_x + bar_w - 140, bar_y - 28), f"{xp} / {next_xp} XP", font=font_sub, fill=(200, 200, 200))
-
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG")
-        buffer.seek(0)
-        return buffer
-
-    # تشغيل عملية الرسم في الخفاء لمنع تعليق البوت
-    loop = asyncio.get_event_loop()
-    buffer = await loop.run_in_executor(None, draw_card)
-    return discord.File(buffer, filename="rank.png")
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+    return discord.File(buffer, filename="rank.png")
 
 # ---------------------------------------------------------
 # 4. الأحداث (Events)
