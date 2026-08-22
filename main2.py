@@ -71,59 +71,64 @@ def get_user_rank(user_id, users):
         if u_id == str(user_id):
             return rank
     return 1
+
 # ---------------------------------------------------------
 # 3. توليد صور البطاقات (Rank Card)
 # ---------------------------------------------------------
 async def generate_rank_card(user, level, xp, next_xp, rank_num):
-    width, height = 800, 250
-    image = Image.new("RGBA", (width, height), (15, 16, 18, 255))
-    draw = ImageDraw.Draw(image)
+    width, height = 800, 250
+    image = Image.new("RGBA", (width, height), (15, 16, 18, 255))
+    draw = ImageDraw.Draw(image)
 
-    # خلفية البطاقة الداخلية
-    draw.rounded_rectangle((20, 20, width - 20, height - 20), radius=20, fill=(24, 26, 32, 255))
+    # خلفية البطاقة الداخلية
+    draw.rounded_rectangle((20, 20, width - 20, height - 20), radius=20, fill=(24, 26, 32, 255))
 
-    # جلب صورة الأفتار
-    avatar_asset = user.display_avatar.with_format("png").with_size(128)
-    avatar_bytes = await avatar_asset.read()
-    avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
-    avatar_img = avatar_img.resize((140, 140))
+    # جلب صورة الأفتار
+    avatar_asset = user.display_avatar.with_format("png").with_size(128)
+    avatar_bytes = await avatar_asset.read()
+    avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
+    avatar_img = avatar_img.resize((140, 140))
 
-    # قص الأفتار بشكل دائري
-    mask = Image.new("L", (140, 140), 0)
-    draw_mask = ImageDraw.Draw(mask)
-    draw_mask.ellipse((0, 0, 140, 140), fill=255)
-    image.paste(avatar_img, (50, 55), mask)
+    # قص الأفتار بشكل دائري
+    mask = Image.new("L", (140, 140), 0)
+    draw_mask = ImageDraw.Draw(mask)
+    draw_mask.ellipse((0, 0, 140, 140), fill=255)
+    image.paste(avatar_img, (50, 55), mask)
 
-    # إضافة النصوص
-    try:
-        font_title = ImageFont.truetype("arial.ttf", 32)
-        font_sub = ImageFont.truetype("arial.ttf", 22)
-    except:
-        font_title = ImageFont.load_default()
-        font_sub = font_title
+    # قراءة خط Roboto عبر المسار المطلق
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    font_path = os.path.join(base_dir, "Roboto.ttf")  # استبدله بـ "Roboto-Bold.ttf" إذا كان اسم ملفك يحتوي على Bold
 
-    draw.text((210, 60), f"{user.display_name}", font=font_title, fill=(255, 255, 255))
-    draw.text((210, 105), f"Rank: #{rank_num}  |  Level: {level}", font=font_sub, fill=(188, 201, 247))
+    try:
+        font_title = ImageFont.truetype(font_path, 32)
+        font_sub = ImageFont.truetype(font_path, 22)
+    except Exception as e:
+        print(f"⚠️ فشل تحميل الخط من المسار {font_path}: {e}")
+        font_title = ImageFont.load_default()
+        font_sub = font_title
 
-    # شريط التقدم (Progress Bar)
-    bar_x, bar_y, bar_w, bar_h = 210, 150, 530, 25
-    draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=12, fill=(40, 44, 52))
+    draw.text((210, 60), f"{user.display_name}", font=font_title, fill=(255, 255, 255))
+    draw.text((210, 105), f"Rank: #{rank_num}  |  Level: {level}", font=font_sub, fill=(188, 201, 247))
 
-    current_lvl_xp = get_next_level_xp(level - 1) if level > 1 else 0
-    xp_in_level = xp - current_lvl_xp
-    needed_in_level = next_xp - current_lvl_xp
-    progress = min(1.0, max(0.0, xp_in_level / needed_in_level))
+    # شريط التقدم (Progress Bar)
+    bar_x, bar_y, bar_w, bar_h = 210, 150, 530, 25
+    draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=12, fill=(40, 44, 52))
 
-    if progress > 0:
-        fill_w = int(bar_w * progress)
-        draw.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=12, fill=(188, 201, 247))
+    current_lvl_xp = get_next_level_xp(level - 1) if level > 1 else 0
+    xp_in_level = xp - current_lvl_xp
+    needed_in_level = next_xp - current_lvl_xp
+    progress = min(1.0, max(0.0, xp_in_level / needed_in_level))
 
-    draw.text((bar_x + bar_w - 120, bar_y - 28), f"{xp} / {next_xp} XP", font=font_sub, fill=(200, 200, 200))
+    if progress > 0:
+        fill_w = int(bar_w * progress)
+        draw.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=12, fill=(188, 201, 247))
 
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG")
-    buffer.seek(0)
-    return discord.File(buffer, filename="rank.png")
+    draw.text((bar_x + bar_w - 120, bar_y - 28), f"{xp} / {next_xp} XP", font=font_sub, fill=(200, 200, 200))
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    buffer.seek(0)
+    return discord.File(buffer, filename="rank.png")
 
 # ---------------------------------------------------------
 # 4. الأحداث (Events)
