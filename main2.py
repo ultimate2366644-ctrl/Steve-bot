@@ -74,42 +74,51 @@ async def generate_rank_card(user, level, xp, next_xp, rank_num):
     image = Image.new("RGBA", (width, height), (15, 16, 18, 255))
     draw = ImageDraw.Draw(image)
 
+    # جلب صورة الأفتار وقصها
     avatar_asset = user.display_avatar.with_format("png").with_size(128)
     avatar_bytes = await avatar_asset.read()
     avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
-    avatar_img = avatar_img.resize((130, 130))
+    avatar_img = avatar_img.resize((135, 135))
 
-    mask = Image.new("L", (130, 130), 0)
+    mask = Image.new("L", (135, 135), 0)
     draw_mask = ImageDraw.Draw(mask)
-    draw_mask.ellipse((0, 0, 130, 130), fill=255)
-    image.paste(avatar_img, (40, 50), mask)
+    draw_mask.ellipse((0, 0, 135, 135), fill=255)
+    image.paste(avatar_img, (40, 57), mask)
 
+    # قراءة الخط (تأكد من اسم الملف مرفوع كـ Roboto-Bold.ttf أو Roboto.ttf)
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    font_path = os.path.join(base_dir, "Roboto.ttf")
+    font_path = os.path.join(base_dir, "Roboto-Bold.ttf")
+    if not os.path.exists(font_path):
+        font_path = os.path.join(base_dir, "Roboto.ttf")
 
     try:
-        font_name = ImageFont.truetype(font_path, 38)
-        font_big_num = ImageFont.truetype(font_path, 34)
-        font_sub_label = ImageFont.truetype(font_path, 16)
-        font_xp = ImageFont.truetype(font_path, 20)
+        font_name = ImageFont.truetype(font_path, 42)
+        font_big_num = ImageFont.truetype(font_path, 38)
+        font_sub_label = ImageFont.truetype(font_path, 18)
+        font_xp = ImageFont.truetype(font_path, 22)
     except Exception as e:
-        print(f"⚠️ فشل قراءة الخط من المسار {font_path}: {e}")
+        print(f"⚠️ فشل قراءة الخط: {e}")
         font_name = font_big_num = font_sub_label = font_xp = ImageFont.load_default()
 
-    draw.text((190, 95), f"{user.display_name}", font=font_name, fill=(255, 255, 255))
+    # 1. اسم المستخدم
+    draw.text((195, 100), f"{user.display_name}", font=font_name, fill=(255, 255, 255))
 
-    draw.text((570, 35), f"#{rank_num}", font=font_big_num, fill=(255, 255, 255))
-    draw.text((560, 80), "RANK", font=font_sub_label, fill=(155, 170, 220))
+    # 2. قسم الـ RANK (أعلى اليمين)
+    draw.text((570, 30), f"#{rank_num}", font=font_big_num, fill=(255, 255, 255))
+    draw.text((560, 78), "RANK", font=font_sub_label, fill=(140, 155, 205))
 
+    # 3. قسم الـ LEVEL (أعلى اليمين)
     lvl_str = f"{level:02d}"
-    draw.text((700, 35), lvl_str, font=font_big_num, fill=(255, 255, 255))
-    draw.text((695, 80), "LEVEL", font=font_sub_label, fill=(155, 170, 220))
+    draw.text((700, 30), lvl_str, font=font_big_num, fill=(255, 255, 255))
+    draw.text((695, 78), "LEVEL", font=font_sub_label, fill=(140, 155, 205))
 
+    # 4. نص الـ XP
     xp_text = f"{xp} XP / {next_xp} XP"
-    draw.text((560, 135), xp_text, font=font_xp, fill=(220, 225, 235))
+    draw.text((560, 130), xp_text, font=font_xp, fill=(240, 240, 245))
 
-    bar_x, bar_y, bar_w, bar_h = 190, 185, 550, 22
-    draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=11, fill=(45, 48, 56))
+    # 5. شريط التقدم السفلي
+    bar_x, bar_y, bar_w, bar_h = 190, 180, 550, 26
+    draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=13, fill=(40, 43, 50))
 
     current_lvl_xp = get_next_level_xp(level - 1) if level > 1 else 0
     xp_in_level = xp - current_lvl_xp
@@ -118,7 +127,7 @@ async def generate_rank_card(user, level, xp, next_xp, rank_num):
 
     if progress > 0:
         fill_w = int(bar_w * progress)
-        draw.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=11, fill=(180, 195, 245))
+        draw.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=13, fill=(185, 200, 245))
 
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
