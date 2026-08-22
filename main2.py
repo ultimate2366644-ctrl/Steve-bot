@@ -71,7 +71,7 @@ async def get_user_rank(user_id: str) -> int:
     return count + 1
 
 # ==========================================
-# 🎨 4. دالة إنشاء بطاقة الـ Rank
+# 🎨 4. دالة إنشاء بطاقة الـ Rank (مع مهلة زمنية مانعة للتعليق)
 # ==========================================
 async def generate_rank_card(
     member: discord.Member,
@@ -86,9 +86,12 @@ async def generate_rank_card(
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     font_path = os.path.join(BASE_DIR, "roboto.ttf")
 
+    # تحديد مهلة زمنية 10 ثوانٍ لطلبات الإنترنت لتجنب التعليق نهائياً
+    timeout = aiohttp.ClientTimeout(total=10)
+
     if not os.path.exists(font_path):
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf") as resp:
                     if resp.status == 200:
                         with open(font_path, "wb") as f:
@@ -104,13 +107,22 @@ async def generate_rank_card(
     except Exception:
         font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
 
-    # جلب صورة الأفاتار بشكل Async باستخدام aiohttp
+    # جلب الأفاتار مع مهلة زمنية وحماية ضد التعليق
     avatar_url = member.display_avatar.with_format("png").url
-    async with aiohttp.ClientSession() as session:
-        async with session.get(avatar_url) as resp:
-            avatar_bytes = await resp.read()
+    avatar_bytes = None
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(avatar_url) as resp:
+                if resp.status == 200:
+                    avatar_bytes = await resp.read()
+    except Exception as e:
+        print(f"⚠️ فشل تنزيل الأفاتار: {e}")
 
-    avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
+    if avatar_bytes:
+        avatar = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
+    else:
+        avatar = Image.new("RGBA", (200, 200), color=(100, 100, 100, 255))
+
     avatar_size = (200, 200)
     avatar = avatar.resize(avatar_size)
 
@@ -348,4 +360,4 @@ token = os.getenv("DISCORD_TOKEN")
 if token:
     bot.run(token)
 else:
-    print("❌ Error: DISCORD_TOKEN is missing in environment variables!")
+print("❌ Error: DISCORD_TOKEN is missing in environment variables!")
