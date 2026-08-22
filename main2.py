@@ -71,7 +71,7 @@ async def get_user_rank(user_id: str) -> int:
     return count + 1
 
 # ==========================================
-# 🎨 4. دالة إنشاء بطاقة الـ Rank (مع مهلة زمنية مانعة للتعليق)
+# 🎨 4. دالة إنشاء بطاقة الـ Rank
 # ==========================================
 async def generate_rank_card(
     member: discord.Member,
@@ -86,7 +86,6 @@ async def generate_rank_card(
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     font_path = os.path.join(BASE_DIR, "roboto.ttf")
 
-    # تحديد مهلة زمنية 10 ثوانٍ لطلبات الإنترنت لتجنب التعليق نهائياً
     timeout = aiohttp.ClientTimeout(total=10)
 
     if not os.path.exists(font_path):
@@ -107,7 +106,6 @@ async def generate_rank_card(
     except Exception:
         font_name = font_stats = font_sub = font_xp = ImageFont.load_default()
 
-    # جلب الأفاتار مع مهلة زمنية وحماية ضد التعليق
     avatar_url = member.display_avatar.with_format("png").url
     avatar_bytes = None
     try:
@@ -321,7 +319,7 @@ async def color(ctx, choice: str = None):
         await ctx.send(
             f"🎨 {ctx.author.mention} بصفتك صاحب **Central Key**، يمكنك اختيار لون أحد المفاتيح السابقة:\n"
             f"• `!color red` 🔴 (Red Key - المستوى 5)\n"
-            f"• `!color purple` 🟣 (Dark Key - المستوى 10)\n"
+            f"• `!color purple` 🟣 (Dark Key - المستوى 10)\.py\n"
             f"• `!color blue` 🔵 (Eleventh Key - المستوى 20)\n"
             f"• `!color remove` ❌ (إزالة اللون واستعادة اللون الأساسي)"
         )
@@ -360,4 +358,4 @@ token = os.getenv("DISCORD_TOKEN")
 if token:
     bot.run(token)
 else:
-print("❌ Error: DISCORD_TOKEN is missing in environment variables!")
+    print("❌ Error: DISCORD_TOKEN is missing in environment variables!")
