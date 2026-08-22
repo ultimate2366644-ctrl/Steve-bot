@@ -99,7 +99,7 @@ async def generate_rank_card(
             print(f"⚠️ فشل تنزيل ملف الخط: {e}")
 
     try:
-        font_name = ImageFont.truetype(font_path, 55)
+        font_name = ImageFont.truetype(font_path, 50)
         font_stats = ImageFont.truetype(font_path, 50)
         font_sub = ImageFont.truetype(font_path, 32)
         font_xp = ImageFont.truetype(font_path, 34)
