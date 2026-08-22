@@ -12,9 +12,8 @@ from PIL import Image, ImageDraw, ImageFont
 TOKEN = os.getenv("DISCORD_TOKEN")
 MONGO_URI = os.getenv("MONGO_URI")
 
-LEVEL_UP_CHANNEL_ID = 123456789012345678  # استبدله بـ ID روم الترقية
+LEVEL_UP_CHANNEL_ID = 123456789012345678
 
-# الاتصال بقاعدة البيانات MongoDB
 try:
     cluster = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     db = cluster["DiscordBot"]
@@ -29,7 +28,6 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# رتب المستويات (مستوى: ID الرتبة)
 LEVEL_ROLES = {
     5: 111111111111111111,
     10: 222222222222222222,
@@ -40,7 +38,6 @@ LEVEL_ROLES = {
 # 2. دوال التعامل مع البيانات والـ XP
 # ---------------------------------------------------------
 def load_data():
-    """قراءة جميع بيانات المستخدمين من MongoDB"""
     users = {}
     try:
         for doc in collection.find():
@@ -50,7 +47,6 @@ def load_data():
     return users
 
 def save_user_data(user_id, xp, level):
-    """حفظ أو تحديث بيانات مستخدم واحد في MongoDB"""
     try:
         collection.update_one(
             {"_id": str(user_id)},
@@ -61,11 +57,9 @@ def save_user_data(user_id, xp, level):
         print(f"⚠️ خطأ أثناء حفظ البيانات: {e}")
 
 def get_next_level_xp(level):
-    """معادلة حساب الـ XP المطلوب للمستوى التالي"""
     return 50 * (level ** 2) + (100 * level)
 
 def get_user_rank(user_id, users):
-    """حساب ترتيب العضو بين باقي الأعضاء"""
     sorted_users = sorted(users.items(), key=lambda x: x[1]['xp'], reverse=True)
     for rank, (u_id, _) in enumerate(sorted_users, 1):
         if u_id == str(user_id):
@@ -77,23 +71,19 @@ def get_user_rank(user_id, users):
 # ---------------------------------------------------------
 async def generate_rank_card(user, level, xp, next_xp, rank_num):
     width, height = 800, 250
-    # خلفية البطاقة السوداء الداكنة
     image = Image.new("RGBA", (width, height), (15, 16, 18, 255))
     draw = ImageDraw.Draw(image)
 
-    # جلب صورة الأفتار
     avatar_asset = user.display_avatar.with_format("png").with_size(128)
     avatar_bytes = await avatar_asset.read()
     avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
     avatar_img = avatar_img.resize((130, 130))
 
-    # قص الأفتار بشكل دائري
     mask = Image.new("L", (130, 130), 0)
     draw_mask = ImageDraw.Draw(mask)
     draw_mask.ellipse((0, 0, 130, 130), fill=255)
     image.paste(avatar_img, (40, 50), mask)
 
-    # قراءة خط Roboto عبر المسار المطلق
     base_dir = os.path.dirname(os.path.abspath(__file__))
     font_path = os.path.join(base_dir, "Roboto.ttf")
 
@@ -106,23 +96,18 @@ async def generate_rank_card(user, level, xp, next_xp, rank_num):
         print(f"⚠️ فشل قراءة الخط من المسار {font_path}: {e}")
         font_name = font_big_num = font_sub_label = font_xp = ImageFont.load_default()
 
-    # 1. اسم المستخدم بجانب الأفتار
     draw.text((190, 95), f"{user.display_name}", font=font_name, fill=(255, 255, 255))
 
-    # 2. قسم الـ RANK (أعلى اليمين)
     draw.text((570, 35), f"#{rank_num}", font=font_big_num, fill=(255, 255, 255))
     draw.text((560, 80), "RANK", font=font_sub_label, fill=(155, 170, 220))
 
-    # 3. قسم الـ LEVEL (أعلى اليمين)
     lvl_str = f"{level:02d}"
     draw.text((700, 35), lvl_str, font=font_big_num, fill=(255, 255, 255))
     draw.text((695, 80), "LEVEL", font=font_sub_label, fill=(155, 170, 220))
 
-    # 4. نص الـ XP
     xp_text = f"{xp} XP / {next_xp} XP"
     draw.text((560, 135), xp_text, font=font_xp, fill=(220, 225, 235))
 
-    # 5. شريط التقدم السفلي (Progress Bar)
     bar_x, bar_y, bar_w, bar_h = 190, 185, 550, 22
     draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=11, fill=(45, 48, 56))
 
@@ -152,7 +137,6 @@ async def on_message(message):
     if message.author.bot or not message.guild:
         return
 
-    # معالجة الأوامر أولاً والتوقف لتفادي التكرار
     if message.content.startswith("!"):
         await bot.process_commands(message)
         return
@@ -164,14 +148,12 @@ async def on_message(message):
     if user_id not in users:
         users[user_id] = {"xp": 0, "level": 1}
 
-    # منح 5 نقاط XP لكل رسالة
     users[user_id]["xp"] += 5
     xp = users[user_id]["xp"]
     lvl = users[user_id]["level"]
 
     next_level_xp = get_next_level_xp(lvl)
 
-    # التحقق من ارتقاء المستوى
     if xp >= next_level_xp:
         while users[user_id]["xp"] >= get_next_level_xp(users[user_id]["level"]):
             users[user_id]["level"] += 1
@@ -205,8 +187,6 @@ async def on_message(message):
 # ---------------------------------------------------------
 # 5. الأوامر (Commands)
 # ---------------------------------------------------------
-
-# أمر عرض البطاقة الشخصية
 @bot.command(name="rank")
 async def rank(ctx, member: discord.Member = None):
     member = member or ctx.author
@@ -224,7 +204,6 @@ async def rank(ctx, member: discord.Member = None):
     rank_file = await generate_rank_card(member, lvl, xp, next_xp, rank_num=user_rank)
     await ctx.send(file=rank_file)
 
-# أمر عرض قائمة المتصدرين
 @bot.command(name="leaderboard", aliases=["lb"])
 async def leaderboard(ctx):
     loop = asyncio.get_event_loop()
@@ -255,4 +234,3 @@ async def leaderboard(ctx):
     await ctx.send(embed=embed)
 
 bot.run(TOKEN)
-، 
