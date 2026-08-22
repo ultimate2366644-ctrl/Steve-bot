@@ -77,53 +77,63 @@ def get_user_rank(user_id, users):
 # ---------------------------------------------------------
 async def generate_rank_card(user, level, xp, next_xp, rank_num):
     width, height = 800, 250
+    # خلفية البطاقة السوداء الداكنة
     image = Image.new("RGBA", (width, height), (15, 16, 18, 255))
     draw = ImageDraw.Draw(image)
-
-    # خلفية البطاقة الداخلية
-    draw.rounded_rectangle((20, 20, width - 20, height - 20), radius=20, fill=(24, 26, 32, 255))
 
     # جلب صورة الأفتار
     avatar_asset = user.display_avatar.with_format("png").with_size(128)
     avatar_bytes = await avatar_asset.read()
     avatar_img = Image.open(io.BytesIO(avatar_bytes)).convert("RGBA")
-    avatar_img = avatar_img.resize((140, 140))
+    avatar_img = avatar_img.resize((130, 130))
 
     # قص الأفتار بشكل دائري
-    mask = Image.new("L", (140, 140), 0)
+    mask = Image.new("L", (130, 130), 0)
     draw_mask = ImageDraw.Draw(mask)
-    draw_mask.ellipse((0, 0, 140, 140), fill=255)
-    image.paste(avatar_img, (50, 55), mask)
+    draw_mask.ellipse((0, 0, 130, 130), fill=255)
+    image.paste(avatar_img, (40, 50), mask)
 
     # قراءة خط Roboto عبر المسار المطلق
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    font_path = os.path.join(base_dir, "Roboto.ttf")  # استبدله بـ "Roboto-Bold.ttf" إذا كان اسم ملفك يحتوي على Bold
+    font_path = os.path.join(base_dir, "Roboto.ttf")
 
     try:
-        font_title = ImageFont.truetype(font_path, 32)
-        font_sub = ImageFont.truetype(font_path, 22)
+        font_name = ImageFont.truetype(font_path, 38)
+        font_big_num = ImageFont.truetype(font_path, 34)
+        font_sub_label = ImageFont.truetype(font_path, 16)
+        font_xp = ImageFont.truetype(font_path, 20)
     except Exception as e:
-        print(f"⚠️ فشل تحميل الخط من المسار {font_path}: {e}")
-        font_title = ImageFont.load_default()
-        font_sub = font_title
+        print(f"⚠️ فشل قراءة الخط من المسار {font_path}: {e}")
+        font_name = font_big_num = font_sub_label = font_xp = ImageFont.load_default()
 
-    draw.text((210, 60), f"{user.display_name}", font=font_title, fill=(255, 255, 255))
-    draw.text((210, 105), f"Rank: #{rank_num}  |  Level: {level}", font=font_sub, fill=(188, 201, 247))
+    # 1. اسم المستخدم بجانب الأفتار
+    draw.text((190, 95), f"{user.display_name}", font=font_name, fill=(255, 255, 255))
 
-    # شريط التقدم (Progress Bar)
-    bar_x, bar_y, bar_w, bar_h = 210, 150, 530, 25
-    draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=12, fill=(40, 44, 52))
+    # 2. قسم الـ RANK (أعلى اليمين)
+    draw.text((570, 35), f"#{rank_num}", font=font_big_num, fill=(255, 255, 255))
+    draw.text((560, 80), "RANK", font=font_sub_label, fill=(155, 170, 220))
+
+    # 3. قسم الـ LEVEL (أعلى اليمين)
+    lvl_str = f"{level:02d}"
+    draw.text((700, 35), lvl_str, font=font_big_num, fill=(255, 255, 255))
+    draw.text((695, 80), "LEVEL", font=font_sub_label, fill=(155, 170, 220))
+
+    # 4. نص الـ XP
+    xp_text = f"{xp} XP / {next_xp} XP"
+    draw.text((560, 135), xp_text, font=font_xp, fill=(220, 225, 235))
+
+    # 5. شريط التقدم السفلي (Progress Bar)
+    bar_x, bar_y, bar_w, bar_h = 190, 185, 550, 22
+    draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), radius=11, fill=(45, 48, 56))
 
     current_lvl_xp = get_next_level_xp(level - 1) if level > 1 else 0
     xp_in_level = xp - current_lvl_xp
     needed_in_level = next_xp - current_lvl_xp
-    progress = min(1.0, max(0.0, xp_in_level / needed_in_level))
+    progress = min(1.0, max(0.0, xp_in_level / needed_in_level)) if needed_in_level > 0 else 0
 
     if progress > 0:
         fill_w = int(bar_w * progress)
-        draw.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=12, fill=(188, 201, 247))
-
-    draw.text((bar_x + bar_w - 120, bar_y - 28), f"{xp} / {next_xp} XP", font=font_sub, fill=(200, 200, 200))
+        draw.rounded_rectangle((bar_x, bar_y, bar_x + fill_w, bar_y + bar_h), radius=11, fill=(180, 195, 245))
 
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
@@ -245,3 +255,4 @@ async def leaderboard(ctx):
     await ctx.send(embed=embed)
 
 bot.run(TOKEN)
+، 
